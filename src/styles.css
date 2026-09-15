@@ -1,0 +1,83 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f3f3f1;
+  background: #0b0b0c;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #0b0b0c; }
+button { font: inherit; }
+
+.app-shell { min-height: 100vh; display: grid; grid-template-columns: 250px minmax(0, 1fr); }
+.sidebar { border-right: 1px solid #242427; padding: 22px 16px; display: flex; flex-direction: column; background: #0e0e0f; }
+.brand-block { display: flex; align-items: center; gap: 12px; padding: 0 8px 26px; }
+.brand-mark { width: 34px; height: 34px; border: 1px solid #3a3a3e; display: grid; place-items: center; font-weight: 700; background: #161618; }
+.brand-name { font-weight: 650; letter-spacing: -.02em; }
+.brand-subtitle { margin-top: 3px; font-size: 11px; color: #77777d; }
+.sidebar-nav { display: grid; gap: 4px; }
+.nav-button { display: flex; gap: 11px; align-items: center; width: 100%; border: 0; padding: 10px 11px; color: #8d8d93; background: transparent; cursor: pointer; text-align: left; }
+.nav-button:hover, .nav-button.active { background: #171719; color: #f2f2ef; }
+.sidebar-footer { margin-top: auto; display: flex; align-items: center; gap: 8px; color: #67676c; font-size: 12px; padding: 12px 8px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #7bca8a; box-shadow: 0 0 0 4px rgba(123,202,138,.08); }
+
+.main-area { padding: 34px clamp(24px, 4vw, 64px) 60px; min-width: 0; }
+.topbar { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; margin-bottom: 34px; }
+.eyebrow { color: #77777d; font-size: 10px; letter-spacing: .16em; font-weight: 700; }
+h1 { margin: 8px 0 0; font-size: clamp(32px, 4vw, 58px); letter-spacing: -.055em; max-width: 800px; line-height: .98; font-weight: 580; }
+.primary-button { border: 1px solid #e8e8e4; color: #101011; background: #f1f1ee; padding: 11px 15px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+.workspace-card { border: 1px solid #252528; background: #111113; min-height: 650px; }
+.workspace-header { min-height: 82px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #242427; gap: 20px; }
+.workspace-title-row { display: flex; align-items: center; gap: 9px; }
+.project-dot { width: 8px; height: 8px; border-radius: 50%; background: #d6d6d0; }
+.status-pill { padding: 4px 7px; border: 1px solid #303034; font-size: 10px; color: #8f8f94; text-transform: uppercase; letter-spacing: .08em; }
+.muted { color: #737379; font-size: 12px; margin-top: 6px; }
+.segmented-control { padding: 3px; background: #0b0b0c; border: 1px solid #29292c; display: flex; }
+.segmented-control button { border: 0; background: transparent; color: #77777d; padding: 8px 11px; display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.segmented-control button.selected { background: #1b1b1e; color: #f1f1ed; }
+.tabs { overflow-x: auto; display: flex; border-bottom: 1px solid #242427; padding: 0 12px; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: #707076; padding: 14px 12px 12px; cursor: pointer; white-space: nowrap; font-size: 12px; }
+.tabs button.active { color: #eeeeeb; border-bottom-color: #eeeeeb; }
+.canvas { display: grid; grid-template-columns: minmax(0, 1fr) 260px; min-height: 510px; }
+.canvas-main { padding: clamp(22px, 3vw, 40px); }
+.inspector { border-left: 1px solid #242427; padding: 26px 18px; background: #0e0e10; }
+.inspector-title { font-size: 11px; color: #838389; text-transform: uppercase; letter-spacing: .11em; margin-bottom: 18px; }
+.pipeline { list-style: none; padding: 0; margin: 0; display: grid; gap: 5px; }
+.pipeline li { display: flex; gap: 11px; align-items: baseline; padding: 8px 2px; color: #a0a0a5; font-size: 12px; border-bottom: 1px solid #1c1c1f; }
+.pipeline li span { font-variant-numeric: tabular-nums; color: #55555b; font-size: 10px; }
+.section-heading { display: flex; align-items: start; justify-content: space-between; margin-bottom: 30px; }
+h2 { margin: 8px 0 0; font-size: clamp(25px, 3vw, 40px); letter-spacing: -.04em; font-weight: 560; }
+.foundation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid #29292c; border-left: 1px solid #29292c; }
+.metric-card { min-height: 200px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; border-right: 1px solid #29292c; border-bottom: 1px solid #29292c; }
+.metric-card strong { font-size: 25px; letter-spacing: -.035em; font-weight: 520; }
+.metric-card span:last-child { color: #77777c; font-size: 12px; line-height: 1.5; }
+.metric-label { color: #8a8a90; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.handoff-grid { display: grid; gap: 8px; }
+.handoff-card { border: 1px solid #29292c; min-height: 104px; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 18px; transition: border-color .18s ease, background .18s ease; }
+.handoff-card:hover { border-color: #4a4a50; background: #151517; }
+.handoff-icon { width: 40px; height: 40px; border: 1px solid #343438; display: grid; place-items: center; color: #b6b6b9; }
+.handoff-icon svg { width: 18px; }
+.handoff-card h3 { margin: 0 0 5px; font-size: 14px; font-weight: 600; }
+.handoff-card p { margin: 0; color: #77777d; font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 960px) {
+  .app-shell { grid-template-columns: 76px minmax(0,1fr); }
+  .brand-block > div:last-child, .nav-button span, .sidebar-footer { display: none; }
+  .brand-block { justify-content: center; padding-left: 0; padding-right: 0; }
+  .nav-button { justify-content: center; }
+  .canvas { grid-template-columns: 1fr; }
+  .inspector { display: none; }
+  .foundation-grid { grid-template-columns: 1fr; }
+  .workspace-header, .topbar { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 620px) {
+  .app-shell { display: block; }
+  .sidebar { display: none; }
+  .main-area { padding: 22px 14px 40px; }
+  h1 { font-size: 38px; }
+  .segmented-control { width: 100%; }
+  .segmented-control button { flex: 1; justify-content: center; font-size: 11px; }
+}
