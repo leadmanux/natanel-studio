@@ -27,11 +27,9 @@ export class GeminiImageGenerator implements ImageGeneratorService {
       contents: buildPrompt(request),
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
-        responseFormat: {
-          image: {
-            aspectRatio: request.aspectRatio,
-            imageSize: request.resolution,
-          },
+        imageConfig: {
+          aspectRatio: request.aspectRatio,
+          imageSize: request.resolution === '0.5K' ? '512' : request.resolution,
         },
       },
     });
