@@ -23,13 +23,16 @@ import {
   Activity,
   Plus,
   ChevronDown,
+  MonitorSmartphone,
 } from 'lucide-react';
+import { ComponentSandboxView } from './ComponentSandboxView';
 
 interface ComponentLibraryViewProps {
   onSelectComponent?: (comp: ComponentDefinition) => void;
 }
 
 export function ComponentLibraryView({ onSelectComponent }: ComponentLibraryViewProps) {
+  const [activeSubTab, setActiveSubTab] = useState<'sandbox' | 'registry'>('sandbox');
   const [components, setComponents] = useState<ComponentDefinition[]>(demoComponents);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -137,20 +140,84 @@ export function ComponentLibraryView({ onSelectComponent }: ComponentLibraryView
 
   return (
     <div className="component-library-view">
-      <div className="section-intro">
-        <div>
-          <span className="eyebrow">REGISTRY & APPROVAL SYSTEM</span>
-          <h2>Component Library & Import Standards</h2>
-          <p className="section-description">
-            Vetted structural blocks with strict approval states. <strong>Only Approved components</strong> may be
-            automatically chosen by the website-generation agent. Candidate blocks undergo visual review, while
-            Rejected clichés (excessive purple gradients, bloated cards) are permanently barred.
-          </p>
+      {/* VIEW SUB-TAB TOGGLE */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '28px',
+          borderBottom: '1px solid #27272a',
+          paddingBottom: '16px',
+          gap: '16px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'inline-flex', gap: '8px', background: '#121214', padding: '4px', borderRadius: '8px', border: '1px solid #27272a' }}>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('sandbox')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 18px',
+              borderRadius: '6px',
+              backgroundColor: activeSubTab === 'sandbox' ? '#d6a84f' : 'transparent',
+              color: activeSubTab === 'sandbox' ? '#111' : '#a1a1aa',
+              fontSize: '13px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <MonitorSmartphone size={15} /> Interactive Sandbox ({demoComponents.filter((c) => c.status === 'approved').length} Live Patterns)
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('registry')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 18px',
+              borderRadius: '6px',
+              backgroundColor: activeSubTab === 'registry' ? '#d6a84f' : 'transparent',
+              color: activeSubTab === 'registry' ? '#111' : '#a1a1aa',
+              fontSize: '13px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Layers size={15} /> Registry & Approval Matrix
+          </button>
         </div>
-        <button className="primary-button" onClick={() => setShowImportModal(true)}>
-          <Plus size={15} /> External Import Adapter
-        </button>
+
+        {activeSubTab === 'registry' && (
+          <button className="primary-button" onClick={() => setShowImportModal(true)}>
+            <Plus size={15} /> External Import Adapter
+          </button>
+        )}
       </div>
+
+      {activeSubTab === 'sandbox' ? (
+        <ComponentSandboxView />
+      ) : (
+        <>
+          <div className="section-intro">
+            <div>
+              <span className="eyebrow">REGISTRY & APPROVAL SYSTEM</span>
+              <h2>Component Library & Import Standards</h2>
+              <p className="section-description">
+                Vetted structural blocks with strict approval states. <strong>Only Approved components</strong> may be
+                automatically chosen by the website-generation agent. Candidate blocks undergo visual review, while
+                Rejected clichés (excessive purple gradients, bloated cards) are permanently barred.
+              </p>
+            </div>
+          </div>
 
       {/* FILTER CONTROLS TOOLBAR */}
       <div className="filter-toolbar-card">
@@ -399,6 +466,8 @@ export function ComponentLibraryView({ onSelectComponent }: ComponentLibraryView
           ))}
         </div>
       </div>
+      </>
+      )}
 
       {/* IMPORT SIMULATION MODAL */}
       {showImportModal && (

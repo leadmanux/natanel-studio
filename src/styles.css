@@ -652,3 +652,54 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
   .segmented-control button { flex: 1; justify-content: center; font-size: 11px; }
   .secondary-filters-row { grid-template-columns: 1fr; }
 }
+
+/* Studio Components Sandbox & Token Utilities */
+.studio-component-root {
+  box-sizing: border-box;
+  width: 100%;
+  position: relative;
+}
+
+.studio-component-root *,
+.studio-component-root *::before,
+.studio-component-root *::after {
+  box-sizing: border-box;
+}
+
+@media (min-width: 769px) {
+  .studio-component-root:not([data-preview-mode="mobile"]):not([data-preview-mode="tablet"]) .md-flex {
+    display: flex !important;
+  }
+  .studio-component-root:not([data-preview-mode="mobile"]):not([data-preview-mode="tablet"]) .md-hide {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .studio-component-root .md-flex {
+    display: none !important;
+  }
+  .studio-component-root .md-hide {
+    display: inline-flex !important;
+  }
+}
+
+/* Sandbox Simulation Modes */
+.studio-component-root[data-preview-mode="mobile"] .md-flex {
+  display: none !important;
+}
+.studio-component-root[data-preview-mode="mobile"] .md-hide {
+  display: inline-flex !important;
+}
+.studio-component-root[data-preview-mode="mobile"] .grid-2col,
+.studio-component-root[data-preview-mode="mobile"] .grid-3col,
+.studio-component-root[data-preview-mode="mobile"] .grid-4col,
+.studio-component-root[data-preview-mode="mobile"] .grid-split {
+  grid-template-columns: 1fr !important;
+}
+
+.studio-component-root[data-preview-mode="tablet"] .grid-3col,
+.studio-component-root[data-preview-mode="tablet"] .grid-4col {
+  grid-template-columns: repeat(2, 1fr) !important;
+}
+

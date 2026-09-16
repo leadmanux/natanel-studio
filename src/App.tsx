@@ -27,10 +27,12 @@ import { BriefEditor } from './components/BriefEditor';
 import { DesignWorkspace } from './components/DesignWorkspace';
 import { AssetPlannerView } from './components/AssetPlannerView';
 import { ComponentLibraryView } from './components/ComponentLibraryView';
+import { ComponentSandboxView } from './components/ComponentSandboxView';
 import { NewProjectModal } from './components/NewProjectModal';
 
 const navItems = [
   { label: 'Projects', icon: FolderKanban },
+  { label: 'Component Sandbox', icon: MonitorSmartphone },
   { label: 'Component Library', icon: Blocks },
   { label: 'Asset Library', icon: ImageIcon },
   { label: 'Settings', icon: Settings },
@@ -153,7 +155,13 @@ export default function App() {
         </header>
 
         {/* View switching based on activeNav */}
-        {activeNav === 'Component Library' ? (
+        {activeNav === 'Component Sandbox' ? (
+          <section className="workspace-card">
+            <div className="canvas-main" style={{ padding: '32px' }}>
+              <ComponentSandboxView />
+            </div>
+          </section>
+        ) : activeNav === 'Component Library' ? (
           <section className="workspace-card">
             <div className="canvas-main" style={{ padding: '32px' }}>
               <ComponentLibraryView />
