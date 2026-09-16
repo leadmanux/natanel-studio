@@ -35,7 +35,37 @@ export function GuaranteeBlock(props: StudioComponentProps<GuaranteeContent>) {
         ],
       };
 
-  const content = { ...defaultContent, ...props.content };
+  const isProduction = props.contentMode === 'production';
+  const hasCustomGuarantee = Boolean(props.content?.headline || (props.content?.points && props.content.points.length > 0));
+
+  if (isProduction && !hasCustomGuarantee) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '28px 24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-surface)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+            {isRtl
+              ? 'פרטי תעודת האחריות וההתחייבות החוזית יפורסמו בהתאם למסמכי הפרויקט המאושרים.'
+              : 'Contractual guarantee terms and warranty clauses will be rendered once verified project terms are supplied.'}
+          </p>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
+  const content: GuaranteeContent = {
+    badge: props.content?.badge || (isProduction ? undefined : defaultContent.badge),
+    headline: props.content?.headline || defaultContent.headline,
+    description: props.content?.description || (isProduction ? undefined : defaultContent.description),
+    points: props.content?.points || (isProduction ? [] : defaultContent.points),
+  };
 
   return (
     <StudioComponentWrapper {...props}>

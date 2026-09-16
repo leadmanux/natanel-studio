@@ -134,10 +134,50 @@ const studioComponentImplementations: Record<string, React.ComponentType<StudioC
 };
 
 // Aliases mapping historical or alternate registry keys to canonical implementation
-const aliases: Record<string, string> = {
-  'hero-cinematic-panorama-01': 'hero-architectural-panorama-02',
+export const aliases: Record<string, string> = {
+  // Navigation
   'nav-studio-minimal-01': 'nav-minimal-dock-01',
+
+  // Hero
+  'hero-cinematic-panorama-01': 'hero-architectural-panorama-02',
+  'hero-product-spotlight-01': 'hero-product-commerce-01',
+  'hero-local-service-01': 'hero-local-conversion-01',
+
+  // Proof & CRO
+  'cro-emblem-strip-01': 'cro-trust-strip-01',
+  'cro-metric-proof-01': 'cro-metrics-quantified-01',
+
+  // Portfolio & Storytelling
+  'storytelling-editorial-narrative-01': 'portfolio-editorial-narrative-01',
+  'storytelling-sticky-narrative-01': 'portfolio-sticky-split-01',
+  'portfolio-before-after-slider-01': 'portfolio-before-after-01',
+
+  // Testimonials
+  'testimonials-case-outcome-01': 'testimonials-case-study-outcome-01',
+
+  // Forms
+  'forms-high-intent-inquiry-01': 'forms-multistep-intake-01',
+  'forms-single-conversion-01': 'forms-single-step-conversion-01',
+
+  // CTA
+  'cta-contrast-closure-01': 'cta-monumental-statement-01',
+  'cta-twotone-urgency-01': 'cta-two-tone-urgency-01',
+
+  // Ecommerce
+  'ecommerce-editorial-reel-01': 'ecommerce-product-grid-01',
+  'ecommerce-product-detail-01': 'ecommerce-detail-accordion-01',
+
+  // Footer
+  'footer-architectural-01': 'footer-editorial-architectural-01',
+  'footer-directory-01': 'footer-directory-multicolumn-01',
 };
+
+/**
+ * Resolves a component ID or alias to its canonical implementation ID.
+ */
+export function resolveComponentId(id: string): string {
+  return aliases[id] || id;
+}
 
 /**
  * Returns true if an actual renderable React implementation exists for this component ID.

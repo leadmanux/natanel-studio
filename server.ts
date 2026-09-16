@@ -89,35 +89,33 @@ async function startServer() {
     }
   });
 
-  app.patch('/api/components/:id/status', (req, res) => {
+  app.patch('/api/components/:id/status', async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
       if (!status || !['approved', 'candidate', 'rejected'].includes(status)) {
         return res.status(400).json({ error: 'Valid status ("approved" | "candidate" | "rejected") is required.' });
       }
-      const updated = canonicalComponentStore.updateComponentStatus(id, status);
-      if (!updated) {
-        return res.status(404).json({ error: `Component with ID "${id}" not found.` });
-      }
+      const updated = await canonicalComponentStore.updateComponentStatus(id, status);
       return res.json({ component: updated });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update component status.';
-      return res.status(500).json({ error: message });
+      const statusCode = message.includes('does not exist') ? 404 : 400;
+      return res.status(statusCode).json({ error: message });
     }
   });
 
-  app.post('/api/components/candidate', (req, res) => {
+  app.post('/api/components/candidate', async (req, res) => {
     try {
       const candidate = req.body;
       if (!candidate || !candidate.id || !candidate.name) {
         return res.status(400).json({ error: 'Candidate component specification with id and name is required.' });
       }
-      const saved = canonicalComponentStore.registerCandidate(candidate);
+      const saved = await canonicalComponentStore.registerCandidate(candidate);
       return res.json({ component: saved });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to register candidate.';
-      return res.status(500).json({ error: message });
+      return res.status(400).json({ error: message });
     }
   });
 
@@ -129,19 +127,30 @@ async function startServer() {
         return res.status(400).json({ error: 'Project payload is required.' });
       }
 
-      // Always check canonical server store: candidates marked 'candidate' or 'rejected' are strictly ineligible
-      const canonicalAll = canonicalComponentStore.getAllComponents();
-      const statusMap = new Map<string, string>(canonicalAll.map((c) => [c.id, c.status]));
+      // Canonical server registry is authoritative.
+      // AI selection may use ONLY canonicalComponentStore.getApprovedComponents().
+      const canonicalApproved = canonicalComponentStore.getApprovedComponents();
+      const approvedMap = new Map(canonicalApproved.map((c) => [c.id, c]));
 
-      const candidatePool = (candidates && Array.isArray(candidates) ? candidates : canonicalAll).map((c: any) => ({
-        ...c,
-        status: statusMap.get(c.id) || c.status,
-      }));
+      let eligibleComponents: typeof canonicalApproved;
 
-      const eligibleApprovedOnly = candidatePool.filter((c: any) => c.status === 'approved');
+      // If client supplied candidate IDs, intersect strictly with canonical approved registry IDs
+      // and retrieve component metadata from canonical server registry.
+      // Unknown IDs and non-approved IDs are rejected/ignored.
+      if (Array.isArray(candidates) && candidates.length > 0) {
+        const requestedIds = candidates
+          .map((c: any) => (typeof c === 'string' ? c : c?.id))
+          .filter(Boolean);
+
+        eligibleComponents = requestedIds
+          .map((id: string) => approvedMap.get(id))
+          .filter((c): c is (typeof canonicalApproved)[number] => c !== undefined);
+      } else {
+        eligibleComponents = canonicalApproved;
+      }
 
       const selector = new GeminiComponentSelector();
-      const selections = await selector.selectDetailed(project, eligibleApprovedOnly);
+      const selections = await selector.selectDetailed(project, eligibleComponents);
       return res.json({ selections });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to select components.';

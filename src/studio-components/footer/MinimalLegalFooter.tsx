@@ -11,8 +11,9 @@ export interface MinimalLegalFooterContent {
 export function MinimalLegalFooter(props: StudioComponentProps<MinimalLegalFooterContent>) {
   const isRtl = props.direction === 'rtl';
 
-  const brand = props.content?.brandName || 'NATANEL STUDIO';
-  const copyright = props.content?.copyright || (isRtl ? `© ${new Date().getFullYear()} סטודיו נתנאל. כל הזכויות שמורות.` : `© ${new Date().getFullYear()} Natanel Studio. All rights reserved.`);
+  const isProduction = props.contentMode === 'production';
+  const brand = props.content?.brandName || (isProduction ? '' : 'NATANEL STUDIO');
+  const copyright = props.content?.copyright || (isProduction ? `© ${new Date().getFullYear()} ${props.content?.brandName || ''}. All rights reserved.` : (isRtl ? `© ${new Date().getFullYear()} סטודיו נתנאל. כל הזכויות שמורות.` : `© ${new Date().getFullYear()} Natanel Studio. All rights reserved.`));
   const legal = props.content?.legalNotice || (isRtl ? 'תנאי שימוש • מדיניות פרטיות • הצהרת נגישות' : 'Terms of Service • Privacy Notice • Accessibility Statement');
 
   return (

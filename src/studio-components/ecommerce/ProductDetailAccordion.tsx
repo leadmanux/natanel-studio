@@ -30,13 +30,38 @@ export function ProductDetailAccordion(props: StudioComponentProps<ProductDetail
         { label: 'Provenance', value: 'Fabricated in Tuscany, finished at Natanel Studio' },
       ];
 
-  const specs = props.content?.specs || defaultSpecs;
-  const care = props.content?.careInstructions || (isRtl
+  const isProduction = props.contentMode === 'production';
+  const hasCustomSpecs = Boolean(props.content?.specs && props.content.specs.length > 0);
+
+  if (isProduction && !hasCustomSpecs && !props.content?.warrantyTerms && !props.content?.careInstructions) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-surface)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+            {isRtl
+              ? 'מפרט טכני, הוראות טיפול ותנאי אחריות יוצגו בהתאם לפריט שנבחר בחנות.'
+              : 'Technical specs, care guidelines, and warranty terms will be rendered for the selected product.'}
+          </p>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
+  const specs = props.content?.specs || (isProduction ? [] : defaultSpecs);
+  const care = props.content?.careInstructions || (isProduction ? '' : (isRtl
     ? 'ניקוי בעזרת מטלית מיקרופייבר לחה בלבד. יש להימנע משימוש בחומרי ניקוי חומציים או שוחקים העלולים לפגוע באיטום האבן הטבעית.'
-    : 'Clean exclusively using a lightly dampened microfiber cloth. Avoid acidic cleaners or abrasive chemical detergents to preserve the natural stone sealer.');
-  const warranty = props.content?.warrantyTerms || (isRtl
+    : 'Clean exclusively using a lightly dampened microfiber cloth. Avoid acidic cleaners or abrasive chemical detergents to preserve the natural stone sealer.'));
+  const warranty = props.content?.warrantyTerms || (isProduction ? '' : (isRtl
     ? 'אחריות יצרן מלאה ל-5 שנים על גוף התאורה, המערכת החשמלית ומנגנון העמעום.'
-    : '5-year comprehensive manufacturer warranty covering structural joinery and integrated circadian driver electronics.');
+    : '5-year comprehensive manufacturer warranty covering structural joinery and integrated circadian driver electronics.'));
 
   return (
     <StudioComponentWrapper {...props}>

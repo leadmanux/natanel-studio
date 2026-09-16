@@ -91,6 +91,11 @@ class ComponentRegistryRepository {
     });
   }
 
+  /**
+   * Syncs with canonical server registry.
+   * When server is reachable, server state is strictly authoritative.
+   * LocalStorage serves solely as an offline cache/fallback.
+   */
   async syncWithServer(): Promise<ComponentDefinition[]> {
     if (this.isSyncing) return this.cache || demoComponents;
     this.isSyncing = true;
@@ -99,29 +104,11 @@ class ComponentRegistryRepository {
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data.components) && data.components.length > 0) {
-          // If local has more recent overrides, retain them; otherwise use server state
-          const serverMap = new Map<string, ComponentDefinition>(data.components.map((c: ComponentDefinition) => [c.id, c]));
-          const merged: ComponentDefinition[] = [];
-
-          // Include all server items
-          for (const sComp of data.components) {
-            const localComp = this.cache?.find((c) => c.id === sComp.id);
-            // Local takes precedence if modified
-            merged.push(localComp || sComp);
-          }
-
-          // Include any local candidates not yet on server
-          if (this.cache) {
-            for (const lComp of this.cache) {
-              if (!serverMap.has(lComp.id)) {
-                merged.push(lComp);
-              }
-            }
-          }
-
-          this.cache = merged;
+          // Server state is canonical. Overwrite local cache with authoritative server state.
+          this.cache = data.components;
           this.saveToLocalStorage();
           this.notify();
+          return this.cache || demoComponents;
         }
       }
     } catch {
@@ -151,68 +138,127 @@ class ComponentRegistryRepository {
     return all.find((c) => c.id === id) || null;
   }
 
+  /**
+   * Updates component approval status.
+   * Awaits server confirmation when online and updates local cache from confirmed server result.
+   * If server write fails, surfaces the error instead of silently pretending success.
+   */
   async updateStatus(id: string, newStatus: 'approved' | 'candidate' | 'rejected'): Promise<ComponentDefinition> {
     if (!this.cache) {
       this.initCache();
     }
 
-    let updatedItem: ComponentDefinition | null = null;
-    this.cache = (this.cache || demoComponents).map((comp) => {
-      if (comp.id === id) {
-        updatedItem = { ...comp, status: newStatus };
-        return updatedItem;
-      }
-      return comp;
-    });
+    let confirmedItem: ComponentDefinition | null = null;
+    let isNetworkError = false;
 
-    if (!updatedItem) {
-      throw new Error(`Component with ID "${id}" not found in canonical repository.`);
+    try {
+      const res = await fetch(`/api/components/${encodeURIComponent(id)}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server failed to update status (${res.status})`);
+      }
+
+      const resData = await res.json();
+      confirmedItem = resData.component;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Check if it was purely a network disconnection / offline error
+      if (err instanceof TypeError || msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        isNetworkError = true;
+        console.warn('[ComponentRegistryRepository] Server unreachable, falling back to local storage:', err);
+      } else {
+        // Business logic or validation error from server (e.g. incomplete provenance, bad status)
+        throw err;
+      }
     }
 
-    this.saveToLocalStorage();
-    this.notify();
+    if (confirmedItem) {
+      this.cache = (this.cache || demoComponents).map((c) => (c.id === id ? confirmedItem! : c));
+      this.saveToLocalStorage();
+      this.notify();
+      return confirmedItem;
+    }
 
-    // Replicate to server asynchronously
-    fetch(`/api/components/${encodeURIComponent(id)}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    }).catch((err) => {
-      console.warn('[ComponentRegistryRepository] Failed to sync status to server:', err);
-    });
+    if (isNetworkError) {
+      // Offline fallback
+      const existing = (this.cache || demoComponents).find((c) => c.id === id);
+      if (!existing) {
+        throw new Error(`Component with ID "${id}" not found.`);
+      }
+      const updated = { ...existing, status: newStatus };
+      this.cache = (this.cache || demoComponents).map((c) => (c.id === id ? updated : c));
+      this.saveToLocalStorage();
+      this.notify();
+      return updated;
+    }
 
-    return updatedItem;
+    throw new Error(`Failed to update status for component "${id}".`);
   }
 
+  /**
+   * Registers a candidate component.
+   * Awaits server response when online and updates local cache from confirmed result.
+   */
   async registerCandidate(candidate: ComponentDefinition): Promise<ComponentDefinition> {
     if (!this.cache) {
       this.initCache();
     }
 
-    const normalized: ComponentDefinition = {
-      ...candidate,
-      status: 'candidate', // candidates are candidate status by default
-      dateImported: candidate.dateImported || new Date().toISOString().split('T')[0],
-      version: candidate.version || '1.0.0',
-    };
+    let confirmedItem: ComponentDefinition | null = null;
+    let isNetworkError = false;
 
-    // Remove existing if any
-    this.cache = (this.cache || demoComponents).filter((c) => c.id !== normalized.id);
-    this.cache.unshift(normalized);
+    try {
+      const res = await fetch('/api/components/candidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(candidate),
+      });
 
-    this.saveToLocalStorage();
-    this.notify();
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server failed to register candidate (${res.status})`);
+      }
 
-    // Replicate to server asynchronously
-    fetch('/api/components/candidate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(normalized),
-    }).catch((err) => {
-      console.warn('[ComponentRegistryRepository] Failed to sync candidate to server:', err);
-    });
+      const resData = await res.json();
+      confirmedItem = resData.component;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof TypeError || msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        isNetworkError = true;
+        console.warn('[ComponentRegistryRepository] Server unreachable, applying offline fallback for candidate:', err);
+      } else {
+        throw err;
+      }
+    }
 
-    return normalized;
+    if (confirmedItem) {
+      this.cache = (this.cache || demoComponents).filter((c) => c.id !== confirmedItem!.id);
+      this.cache.unshift(confirmedItem);
+      this.saveToLocalStorage();
+      this.notify();
+      return confirmedItem;
+    }
+
+    if (isNetworkError) {
+      const normalized: ComponentDefinition = {
+        ...candidate,
+        status: 'candidate',
+        dateImported: candidate.dateImported || new Date().toISOString().split('T')[0],
+        version: candidate.version || '1.0.0',
+      };
+      this.cache = (this.cache || demoComponents).filter((c) => c.id !== normalized.id);
+      this.cache.unshift(normalized);
+      this.saveToLocalStorage();
+      this.notify();
+      return normalized;
+    }
+
+    throw new Error(`Failed to register candidate component "${candidate.name || candidate.id}".`);
   }
 
   subscribe(listener: Listener): () => void {

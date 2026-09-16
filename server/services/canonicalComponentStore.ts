@@ -1,61 +1,89 @@
 import { demoComponents, type ComponentDefinition } from '../../shared/componentRegistry';
-import fs from 'fs';
-import path from 'path';
+import {
+  type ComponentRegistryPersistence,
+  createComponentPersistence,
+} from './persistence';
+
+/**
+ * Validates whether an external component has complete required provenance.
+ */
+export function validateProvenance(component: ComponentDefinition): {
+  valid: boolean;
+  missing: string[];
+} {
+  if (component.source === 'internal') {
+    return { valid: true, missing: [] };
+  }
+
+  const missing: string[] = [];
+  if (!component.source || component.source.trim() === '') {
+    missing.push('source');
+  }
+  if (!component.sourceUrl || component.sourceUrl.trim() === '') {
+    missing.push('sourceUrl');
+  }
+  if (!component.sourceAuthor || component.sourceAuthor.trim() === '' || component.sourceAuthor.toLowerCase() === 'external author') {
+    missing.push('sourceAuthor');
+  }
+  if (!component.license || component.license.trim() === '') {
+    missing.push('license');
+  }
+
+  return {
+    valid: missing.length === 0,
+    missing,
+  };
+}
 
 /**
  * Server-side canonical component store.
- * Holds canonical approval state, persists status overrides to disk,
- * and ensures GeminiComponentSelector and UI share the exact same source of truth.
+ * Authoritative source of truth for component status, provenance, and AI selection.
  */
-class CanonicalComponentStore {
-  private overridesFilePath = path.join(process.cwd(), 'data', 'component-status-overrides.json');
+export class CanonicalComponentStore {
+  private persistence: ComponentRegistryPersistence;
   private statusOverrides: Map<string, 'approved' | 'candidate' | 'rejected'> = new Map();
   private registeredCandidates: Map<string, ComponentDefinition> = new Map();
+  private initializedPromise: Promise<void> | null = null;
 
-  constructor() {
-    this.loadFromDisk();
+  constructor(persistence?: ComponentRegistryPersistence) {
+    this.persistence = persistence || createComponentPersistence();
+    this.init();
   }
 
-  private loadFromDisk() {
-    try {
-      if (fs.existsSync(this.overridesFilePath)) {
-        const raw = fs.readFileSync(this.overridesFilePath, 'utf-8');
-        const data = JSON.parse(raw);
-        if (data.statusOverrides && typeof data.statusOverrides === 'object') {
-          Object.entries(data.statusOverrides).forEach(([id, status]) => {
-            if (status === 'approved' || status === 'candidate' || status === 'rejected') {
-              this.statusOverrides.set(id, status);
-            }
-          });
+  init(): Promise<void> {
+    if (!this.initializedPromise) {
+      this.initializedPromise = (async () => {
+        try {
+          const data = await this.persistence.load();
+          if (data.statusOverrides) {
+            Object.entries(data.statusOverrides).forEach(([id, status]) => {
+              if (status === 'approved' || status === 'candidate' || status === 'rejected') {
+                this.statusOverrides.set(id, status);
+              }
+            });
+          }
+          if (Array.isArray(data.registeredCandidates)) {
+            data.registeredCandidates.forEach((cand: ComponentDefinition) => {
+              if (cand && cand.id) {
+                this.registeredCandidates.set(cand.id, cand);
+              }
+            });
+          }
+        } catch (err) {
+          console.warn('[CanonicalComponentStore] Failed initializing persistence:', err);
         }
-        if (Array.isArray(data.registeredCandidates)) {
-          data.registeredCandidates.forEach((cand: ComponentDefinition) => {
-            if (cand && cand.id) {
-              this.registeredCandidates.set(cand.id, cand);
-            }
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('[CanonicalComponentStore] Could not read status overrides file, using default registry:', err);
+      })();
     }
+    return this.initializedPromise;
   }
 
-  private saveToDisk() {
-    try {
-      const dir = path.dirname(this.overridesFilePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      const data = {
-        statusOverrides: Object.fromEntries(this.statusOverrides.entries()),
-        registeredCandidates: Array.from(this.registeredCandidates.values()),
-        updatedAt: new Date().toISOString(),
-      };
-      fs.writeFileSync(this.overridesFilePath, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (err) {
-      console.warn('[CanonicalComponentStore] Could not persist status overrides to disk:', err);
-    }
+  private async persist(): Promise<void> {
+    const data = {
+      statusOverrides: Object.fromEntries(this.statusOverrides.entries()),
+      registeredCandidates: Array.from(this.registeredCandidates.values()),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.persistence.save(data);
   }
 
   getAllComponents(): ComponentDefinition[] {
@@ -80,26 +108,78 @@ class CanonicalComponentStore {
     return this.getAllComponents().filter((c) => c.status === 'approved');
   }
 
-  updateComponentStatus(id: string, newStatus: 'approved' | 'candidate' | 'rejected'): ComponentDefinition | null {
-    this.statusOverrides.set(id, newStatus);
-    this.saveToDisk();
-
+  getComponentById(id: string): ComponentDefinition | null {
     const all = this.getAllComponents();
     return all.find((c) => c.id === id) || null;
   }
 
-  registerCandidate(candidate: ComponentDefinition): ComponentDefinition {
+  async updateComponentStatus(
+    id: string,
+    newStatus: 'approved' | 'candidate' | 'rejected'
+  ): Promise<ComponentDefinition> {
+    await this.init();
+
+    const existing = this.getComponentById(id);
+    if (!existing) {
+      throw new Error(`Component with ID "${id}" does not exist in canonical registry.`);
+    }
+
+    // Enforce mandate: External candidate missing provenance cannot be approved
+    if (newStatus === 'approved' && existing.source !== 'internal') {
+      const provenance = validateProvenance(existing);
+      if (!provenance.valid) {
+        throw new Error(
+          `Cannot approve external component "${existing.name || id}": Provenance is incomplete. Missing: ${provenance.missing.join(', ')}.`
+        );
+      }
+    }
+
+    this.statusOverrides.set(id, newStatus);
+    await this.persist();
+
+    return {
+      ...existing,
+      status: newStatus,
+    };
+  }
+
+  async registerCandidate(candidate: ComponentDefinition): Promise<ComponentDefinition> {
+    await this.init();
+
+    if (!candidate || !candidate.id || !candidate.name) {
+      throw new Error('Valid candidate component with id and name is required.');
+    }
+
+    // Strip fake default author placeholders if provided
+    let cleanAuthor = candidate.sourceAuthor;
+    if (cleanAuthor && cleanAuthor.toLowerCase() === 'external author') {
+      cleanAuthor = undefined;
+    }
+
     const normalized: ComponentDefinition = {
       ...candidate,
       status: 'candidate', // candidates are candidate status by default
-      dateImported: new Date().toISOString().split('T')[0],
+      sourceAuthor: cleanAuthor,
+      sourceUrl: candidate.sourceUrl || null,
+      upstreamComponent: candidate.upstreamComponent || null,
+      originalCategory: candidate.originalCategory || null,
+      dateImported: candidate.dateImported || new Date().toISOString().split('T')[0],
       version: candidate.version || '1.0.0',
+      mobileVerificationStatus: candidate.mobileVerificationStatus || 'untested',
+      rtlVerificationStatus: candidate.rtlVerificationStatus || 'untested',
+      supportedProjectTypes: candidate.supportedProjectTypes?.length
+        ? candidate.supportedProjectTypes
+        : ['business_website', 'both'],
     };
 
     this.registeredCandidates.set(normalized.id, normalized);
-    this.saveToDisk();
+    // If status override was previously set, retain or set to candidate
+    this.statusOverrides.set(normalized.id, 'candidate');
+    await this.persist();
+
     return normalized;
   }
 }
 
+// Export singleton
 export const canonicalComponentStore = new CanonicalComponentStore();

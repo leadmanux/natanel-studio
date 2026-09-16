@@ -95,10 +95,44 @@ export function ProductGridCardRow(props: StudioComponentProps<ProductGridConten
   const eyebrow = props.content?.eyebrow || (isRtl ? 'אובייקטים ועיצוב משלים' : 'THE LIVING COLLECTION');
   const title = props.content?.title || (isRtl ? 'פריטי אספנות ומהדורות מוגבלות' : 'Architectural Objects & Limited Editions');
   const isProduction = props.contentMode === 'production';
-  const rawProducts = props.content?.products || defaultProducts;
-  const products = isProduction && !props.content?.products
-    ? rawProducts.map((p) => ({ ...p, rating: '' }))
-    : rawProducts;
+  const hasCustomProducts = Boolean(props.content?.products && props.content.products.length > 0);
+
+  if (isProduction && !hasCustomProducts) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '48px 24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-bg)',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <h2
+              style={{
+                fontFamily: 'var(--studio-font-display)',
+                fontSize: '22px',
+                fontWeight: 600,
+                color: 'var(--studio-text)',
+                marginBottom: '8px',
+              }}
+            >
+              {title}
+            </h2>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+              {isRtl
+                ? 'מוצרים ומחירים יוצגו לאחר חיבור קולקציית Shopify או הזנת פריטי קטלוג בפרויקט.'
+                : 'Products and prices will be rendered once connected to Shopify or inventory is supplied.'}
+            </p>
+          </div>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
+  const products = props.content?.products || defaultProducts;
 
   const handleAdd = (id: string, name: string) => {
     setCartItems((prev) => ({ ...prev, [id]: true }));

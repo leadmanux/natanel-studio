@@ -51,8 +51,8 @@ export function ReviewSummaryBar(props: StudioComponentProps<ReviewSummaryConten
   }
 
   const score = props.content?.score || '4.98';
-  const total = props.content?.totalReviews || (isRtl ? '258 חוות דעת של לקוחות פרימיום' : '258 verified sovereign reviews');
-  const platforms = props.content?.platforms || defaultPlatforms;
+  const total = props.content?.totalReviews || (isProduction ? '' : (isRtl ? '258 חוות דעת של לקוחות פרימיום' : '258 verified sovereign reviews'));
+  const platforms = props.content?.platforms || (isProduction ? [] : defaultPlatforms);
   const cta = props.content?.ctaLabel || (isRtl ? 'לכל הביקורות המאומתות' : 'Read All Client Logs');
 
   return (

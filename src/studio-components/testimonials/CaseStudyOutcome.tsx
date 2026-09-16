@@ -48,7 +48,38 @@ export function CaseStudyOutcome(props: StudioComponentProps<CaseOutcomeContent>
         metrics: defaultMetrics,
       };
 
-  const content = { ...defaultContent, ...props.content };
+  const isProduction = props.contentMode === 'production';
+  const hasCustomCase = Boolean(props.content?.caseTitle || props.content?.clientQuote || (props.content?.metrics && props.content.metrics.length > 0));
+
+  if (isProduction && !hasCustomCase) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-surface)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+            {isRtl
+              ? 'מקרה בוחן ומדדי תשואה יוצגו לאחר הזנת פרטי פרויקט מאומתים.'
+              : 'Audited case studies and outcome metrics will be displayed once confirmed project data is supplied.'}
+          </p>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
+  const content: CaseOutcomeContent = {
+    caseTag: props.content?.caseTag || (isProduction ? undefined : defaultContent.caseTag),
+    caseTitle: props.content?.caseTitle || defaultContent.caseTitle,
+    clientQuote: props.content?.clientQuote || (isProduction ? undefined : defaultContent.clientQuote),
+    clientName: props.content?.clientName || (isProduction ? undefined : defaultContent.clientName),
+    metrics: props.content?.metrics || (isProduction ? [] : defaultContent.metrics),
+  };
 
   return (
     <StudioComponentWrapper {...props}>

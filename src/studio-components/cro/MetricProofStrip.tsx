@@ -29,6 +29,31 @@ export function MetricProofStrip(props: StudioComponentProps<MetricProofContent>
         { value: '18 Yrs', label: 'Unbroken Practice', subtext: 'Established MMVIII' },
       ];
 
+  const isProduction = props.contentMode === 'production';
+  const hasCustomMetrics = Boolean(props.content?.metrics && props.content.metrics.length > 0);
+
+  if (isProduction && !hasCustomMetrics) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-surface)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+            {isRtl
+              ? 'מדדי ביצוע ומספרים מוכחים יוצגו לאחר הזנת נתוני תיק העבודות המאומתים.'
+              : 'Verifiable practice metrics and portfolio outcomes will be displayed once confirmed by project data.'}
+          </p>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
   const metrics = props.content?.metrics || defaultMetrics;
 
   return (

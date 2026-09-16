@@ -37,10 +37,21 @@ export function EditorialArchitecturalFooter(props: StudioComponentProps<Archite
       };
 
   const isProduction = props.contentMode === 'production';
-  const content: ArchitecturalFooterContent = { ...defaultContent, ...props.content };
-  if (isProduction && !props.content?.license) {
-    content.license = undefined;
-  }
+  const content: ArchitecturalFooterContent = isProduction
+    ? {
+        brandName: props.content?.brandName || '',
+        tagline: props.content?.tagline,
+        address: props.content?.address,
+        telephone: props.content?.telephone,
+        email: props.content?.email,
+        license: props.content?.license,
+        copyright:
+          props.content?.copyright ||
+          `© ${new Date().getFullYear()} ${props.content?.brandName || ''}. All rights reserved.`,
+      }
+    : { ...defaultContent, ...props.content };
+
+  const hasContactInfo = Boolean(content.address || content.telephone || content.email);
 
   return (
     <StudioComponentWrapper {...props}>
@@ -89,18 +100,24 @@ export function EditorialArchitecturalFooter(props: StudioComponentProps<Archite
             </div>
 
             {/* Atelier Contact */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
-              <strong style={{ color: 'var(--studio-text)', marginBottom: '4px', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.1em' }}>
-                {isRtl ? 'האטלייה הראשי' : 'The Atelier'}
-              </strong>
-              <span style={{ color: 'var(--studio-muted)', lineHeight: 1.5 }}>{content.address}</span>
-              <a href={`tel:${content.telephone}`} style={{ color: 'var(--studio-text)', textDecoration: 'none', fontFamily: 'monospace' }}>
-                {content.telephone}
-              </a>
-              <a href={`mailto:${content.email}`} style={{ color: 'var(--studio-accent)', textDecoration: 'none' }}>
-                {content.email}
-              </a>
-            </div>
+            {hasContactInfo && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                <strong style={{ color: 'var(--studio-text)', marginBottom: '4px', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.1em' }}>
+                  {isRtl ? 'פרטי התקשרות' : 'Direct Contact'}
+                </strong>
+                {content.address && <span style={{ color: 'var(--studio-muted)', lineHeight: 1.5 }}>{content.address}</span>}
+                {content.telephone && (
+                  <a href={`tel:${content.telephone}`} style={{ color: 'var(--studio-text)', textDecoration: 'none', fontFamily: 'monospace' }}>
+                    {content.telephone}
+                  </a>
+                )}
+                {content.email && (
+                  <a href={`mailto:${content.email}`} style={{ color: 'var(--studio-accent)', textDecoration: 'none' }}>
+                    {content.email}
+                  </a>
+                )}
+              </div>
+            )}
 
             {/* Navigation Directory */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>

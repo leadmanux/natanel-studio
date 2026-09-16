@@ -61,10 +61,12 @@ export function CartDrawerSummary(props: StudioComponentProps<CartDrawerContent>
         },
       ];
 
+  const isProduction = props.contentMode === 'production';
   const title = props.content?.drawerTitle || (isRtl ? 'סל רכישות אדריכלי' : 'Your Selected Commissions');
-  const [items, setItems] = useState<CartItem[]>(props.content?.items || defaultItems);
-  const subtotal = props.content?.subtotal || (isRtl ? '₪1,820' : '$540');
-  const shippingNote = props.content?.shippingNote || (isRtl ? 'הזמנה זו זכאית למשלוח מבוטח חינם עד הבית' : 'Eligible for complimentary insured courier dispatch');
+  const initialItems = props.content?.items || (isProduction ? [] : defaultItems);
+  const [items, setItems] = useState<CartItem[]>(initialItems);
+  const subtotal = props.content?.subtotal || (isProduction ? (items.length === 0 ? '$0' : '') : (isRtl ? '₪1,820' : '$540'));
+  const shippingNote = props.content?.shippingNote || (isProduction ? undefined : (isRtl ? 'הזמנה זו זכאית למשלוח מבוטח חינם עד הבית' : 'Eligible for complimentary insured courier dispatch'));
   const checkoutBtn = props.content?.checkoutButtonText || (isRtl ? 'המשך לתשלום מאובטח' : 'Proceed to Sovereign Checkout');
 
   const removeItem = (id: string) => {

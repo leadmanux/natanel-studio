@@ -13,8 +13,9 @@ export function MultiColumnDirectoryFooter(props: StudioComponentProps<Directory
   const [subscribed, setSubscribed] = useState(false);
   const isRtl = props.direction === 'rtl';
 
-  const brand = props.content?.brandName || 'NATANEL STUDIO';
-  const tagline = props.content?.tagline || (isRtl ? 'אדריכלות, עיצוב פנים וחללי מגורים מובחרים' : 'Architecture, Interior Form & Bespoke Commissions');
+  const isProduction = props.contentMode === 'production';
+  const brand = props.content?.brandName || (isProduction ? '' : 'NATANEL STUDIO');
+  const tagline = props.content?.tagline || (isProduction ? '' : (isRtl ? 'אדריכלות, עיצוב פנים וחללי מגורים מובחרים' : 'Architecture, Interior Form & Bespoke Commissions'));
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();

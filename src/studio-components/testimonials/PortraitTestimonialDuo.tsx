@@ -53,6 +53,31 @@ export function PortraitTestimonialDuo(props: StudioComponentProps<TestimonialDu
         },
       ];
 
+  const isProduction = props.contentMode === 'production';
+  const hasCustomTestimonials = Boolean(props.content?.testimonials && props.content.testimonials.length > 0);
+
+  if (isProduction && !hasCustomTestimonials) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-surface)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+            {isRtl
+              ? 'עדויות לקוחות מאומתות עם צילומי דיוקן יוצגו לאחר אישור פרסום רשמי.'
+              : 'Verified commissioner testimonials and client portraits will be displayed once permissions are cleared.'}
+          </p>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
   const title = props.content?.sectionTitle || (isRtl ? 'עדויות לקוחות ומזמיני פרויקטים' : 'Voices of Discerning Commissioners');
   const items = props.content?.testimonials || defaultDuo;
 

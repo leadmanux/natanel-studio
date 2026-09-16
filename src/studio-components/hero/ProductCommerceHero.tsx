@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import type { StudioComponentProps } from '../types';
 import { StudioComponentWrapper } from '../StudioComponentWrapper';
-import { Star, ShoppingBag, Check, Shield } from 'lucide-react';
+import { Star, ShoppingBag, Check, Shield, AlertCircle } from 'lucide-react';
+import { resolveComponentContent, resolveProductionAsset } from '../contentModeHelper';
 
 export interface ProductHeroContent {
   tagline?: string;
@@ -43,14 +44,25 @@ export function ProductCommerceHero(props: StudioComponentProps<ProductHeroConte
         shippingNote: 'Complimentary courier shipping on orders over $100',
       };
 
-  const isProduction = props.contentMode === 'production';
-  const content: ProductHeroContent = { ...defaultContent, ...props.content };
-  if (isProduction && !props.content?.ratingScore) {
-    content.ratingScore = undefined;
-    content.reviewCount = undefined;
-  }
-  const productImage = props.assets?.product?.url ||
-    'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80';
+  const { content, isProduction, missingRequired } = resolveComponentContent(props, defaultContent, {
+    claimFields: [
+      'productName',
+      'price',
+      'originalPrice',
+      'ratingScore',
+      'reviewCount',
+      'shippingNote',
+      'description',
+      'tagline',
+    ],
+    requiredFields: ['productName', 'price'],
+    structuralDefaults: {
+      ctaText: isRtl ? 'הוספה לסל' : 'Add to Cart',
+    },
+  });
+
+  const previewFallbackImg = 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80';
+  const productImage = resolveProductionAsset(props.assets?.product?.url, previewFallbackImg, isProduction);
 
   const handleAddToCart = () => {
     setAdded(true);
@@ -59,6 +71,47 @@ export function ProductCommerceHero(props: StudioComponentProps<ProductHeroConte
     }
     setTimeout(() => setAdded(false), 2400);
   };
+
+  if (isProduction && missingRequired.length > 0) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '48px 24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-surface)',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '640px',
+              margin: '0 auto',
+              padding: '24px',
+              border: '1px dashed #f59e0b',
+              borderRadius: 'var(--studio-radius)',
+              backgroundColor: 'rgba(245, 158, 11, 0.05)',
+              display: 'flex',
+              gap: '16px',
+              alignItems: 'flex-start',
+            }}
+          >
+            <AlertCircle size={20} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <h4 style={{ margin: '0 0 4px', fontSize: '14px', fontWeight: 600, color: 'var(--studio-text)' }}>
+                {isRtl ? 'חסרים שדות חובה בייצור (ProductCommerceHero)' : 'Production Mode: Required Product Fields Missing'}
+              </h4>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)' }}>
+                {isRtl
+                  ? `השדות הבאים נדרשים ואינם מולאים אוטומטית בנתוני דמה: ${missingRequired.join(', ')}`
+                  : `In production mode, product data is never fabricated. Missing required props.content fields: ${missingRequired.join(', ')}`}
+              </p>
+            </div>
+          </div>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
 
   return (
     <StudioComponentWrapper {...props}>
@@ -94,16 +147,37 @@ export function ProductCommerceHero(props: StudioComponentProps<ProductHeroConte
                 position: 'relative',
               }}
             >
-              <img
-                src={productImage}
-                alt={content.productName}
-                referrerPolicy="no-referrer"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
-              />
+              {productImage ? (
+                <img
+                  src={productImage}
+                  alt={content.productName}
+                  referrerPolicy="no-referrer"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    color: 'var(--studio-muted)',
+                    fontSize: '13px',
+                    padding: '24px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <ShoppingBag size={28} strokeWidth={1.5} />
+                  <span>{isRtl ? 'מקום לתמונת מוצר (יחס 4:5)' : 'Product Asset Slot (4:5 Ratio)'}</span>
+                </div>
+              )}
             </div>
           </div>
 

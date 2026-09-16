@@ -26,6 +26,31 @@ export function EditorialQuote(props: StudioComponentProps<EditorialQuoteContent
         commissionType: 'Commission Delivered October MMXXV',
       };
 
+  const isProduction = props.contentMode === 'production';
+  const hasCustomQuote = Boolean(props.content?.quote);
+
+  if (isProduction && !hasCustomQuote) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-bg)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+            {isRtl
+              ? 'ציטוט לקוח מאומת יוצג לאחר אישור פרסום או העלאת חוות דעת לפרויקט.'
+              : 'Verified commissioner quote will be displayed once client clearance is supplied in project content.'}
+          </p>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
   const content = { ...defaultContent, ...props.content };
 
   return (

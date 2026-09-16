@@ -29,6 +29,31 @@ export function TrustCertificationStrip(props: StudioComponentProps<TrustStripCo
         { title: 'Milestone Escrow Security', desc: 'Funds released strictly upon phase approval' },
       ];
 
+  const isProduction = props.contentMode === 'production';
+  const hasCustomItems = Boolean(props.content?.items && props.content.items.length > 0);
+
+  if (isProduction && !hasCustomItems) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-bg)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+            {isRtl
+              ? 'אישורים מקצועיים, רישיונות וביטוחים רשמיים יוצגו לאחר הזנת פרטי הרישוי המאומתים.'
+              : 'Official licenses, trade certifications, and insurance credentials will be displayed once verified records are supplied.'}
+          </p>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
   const items = props.content?.items || defaultItems;
   const icons = [ShieldCheck, Award, CheckCircle2, Lock];
 
