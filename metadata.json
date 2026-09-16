@@ -1,0 +1,6 @@
+{
+  "name": "Natanel Studio",
+  "description": "Website operating system for building modern bespoke sites and Shopify stores",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

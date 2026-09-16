@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
-    "dev:web": "vite",
-    "dev:server": "tsx watch server/index.ts",
-    "build": "vite build",
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit && tsc -p server/tsconfig.json --noEmit",
     "preview": "vite preview"
   },
@@ -27,6 +27,7 @@
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vite": "^7.0.0"
