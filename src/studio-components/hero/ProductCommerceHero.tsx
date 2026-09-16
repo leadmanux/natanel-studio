@@ -19,7 +19,7 @@ export function ProductCommerceHero(props: StudioComponentProps<ProductHeroConte
   const [added, setAdded] = useState(false);
   const isRtl = props.direction === 'rtl';
 
-  const defaultContent = isRtl
+  const defaultContent: ProductHeroContent = isRtl
     ? {
         tagline: 'מהדורה בוטנית מוגבלת',
         productName: 'סרום שיקום מולטי-פפטיד',
@@ -43,7 +43,12 @@ export function ProductCommerceHero(props: StudioComponentProps<ProductHeroConte
         shippingNote: 'Complimentary courier shipping on orders over $100',
       };
 
-  const content = { ...defaultContent, ...props.content };
+  const isProduction = props.contentMode === 'production';
+  const content: ProductHeroContent = { ...defaultContent, ...props.content };
+  if (isProduction && !props.content?.ratingScore) {
+    content.ratingScore = undefined;
+    content.reviewCount = undefined;
+  }
   const productImage = props.assets?.product?.url ||
     'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80';
 
@@ -105,19 +110,23 @@ export function ProductCommerceHero(props: StudioComponentProps<ProductHeroConte
           {/* Commerce Details */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Rating */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ display: 'flex', color: 'var(--studio-accent)' }}>
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={14} fill="currentColor" />
-                ))}
+            {content.ratingScore && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', color: 'var(--studio-accent)' }}>
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} size={14} fill="currentColor" />
+                  ))}
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--studio-text)' }}>
+                  {content.ratingScore}
+                </span>
+                {content.reviewCount && (
+                  <span style={{ fontSize: '12px', color: 'var(--studio-muted)' }}>
+                    ({content.reviewCount})
+                  </span>
+                )}
               </div>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--studio-text)' }}>
-                {content.ratingScore}
-              </span>
-              <span style={{ fontSize: '12px', color: 'var(--studio-muted)' }}>
-                ({content.reviewCount})
-              </span>
-            </div>
+            )}
 
             <span
               style={{

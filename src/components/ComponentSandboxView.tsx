@@ -1,10 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-  studioComponentCatalog,
   getStudioComponent,
+  hasStudioComponentImplementation,
   type StudioRegisteredItem,
 } from '../studio-components/resolver';
-import type { IndustryPresetKey, ThemeMode, ComponentDirection, PreviewMode } from '../studio-components/types';
+import type {
+  StudioIndustryPreset,
+  StudioMotionPreset,
+  ThemeMode,
+  ComponentDirection,
+  PreviewMode,
+} from '../studio-components/types';
+import {
+  getDesignTokensForIndustry,
+  isKnownIndustryPreset,
+} from '../studio-components/designTokens';
+import { StudioMotionWrapper } from '../studio-components/StudioMotionWrapper';
+import { componentRegistryRepository } from '../data/componentRegistryRepository';
+import type { ComponentDefinition } from '@shared/componentRegistry';
 import {
   Monitor,
   Tablet,
@@ -13,24 +26,39 @@ import {
   Moon,
   ArrowRightLeft,
   Search,
-  Filter,
-  CheckCircle2,
-  Sparkles,
-  Layers,
-  Code,
   Sliders,
   ExternalLink,
-  RotateCcw,
   Zap,
+  ShieldCheck,
+  AlertTriangle,
+  FileCheck,
+  Sparkles,
 } from 'lucide-react';
 
-const industryOptions: { key: IndustryPresetKey; label: string; desc: string }[] = [
-  { key: 'architecture', label: 'Architecture & Interiors', desc: 'Warm stone, mineral slate, monolithic rhythm' },
-  { key: 'luxury', label: 'Haute Luxury & Jewelry', desc: 'Champagne gold, onyx black, serif display' },
-  { key: 'contractor', label: 'Contractor & Engineering', desc: 'Safety amber, high-contrast clarity, direct conversions' },
-  { key: 'editorial', label: 'Editorial & Publishing', desc: 'Deep cinnabar, broad typography, asymmetric spacing' },
-  { key: 'skincare', label: 'Botanical & Organic', desc: 'Earthy sage, soft radius, relaxed cadence' },
-  { key: 'consulting', label: 'Advisory & Consulting', desc: 'Cobalt navy, sharp precision, data-led credibility' },
+const industryOptions: { key: StudioIndustryPreset; label: string; desc: string }[] = [
+  { key: 'atelier_luxury', label: 'Atelier & Luxury', desc: 'Champagne gold, onyx black, serif display, 2px radius' },
+  { key: 'beauty_wellness', label: 'Beauty & Wellness', desc: 'Cormorant Garamond, terracotta accent, 10px soft radius' },
+  { key: 'contractor', label: 'Contractor & Engineering', desc: 'Safety amber, high-contrast industrial clarity, 4px radius' },
+  { key: 'interior_design', label: 'Interior Architecture', desc: 'Olive bronze, refined serif/sans balance, 0px radius' },
+  { key: 'professional_services', label: 'Professional Services & Law', desc: 'Cobalt navy, sharp precision, data-led credibility' },
+  { key: 'shopify_beauty', label: 'Shopify Clean Beauty', desc: 'Warm apricot, minimal high-intent commerce, 12px pill radius' },
+  { key: 'fitness', label: 'High-Performance Fitness', desc: 'Neon lime/amber, bold grotesque, high energy cadence' },
+  { key: 'real_estate', label: 'Prestige Real Estate', desc: 'Refined serif, slate champagne, monumental spacing' },
+];
+
+const motionPresetOptions: { key: StudioMotionPreset; label: string }[] = [
+  { key: 'fadeReveal', label: 'Fade Reveal' },
+  { key: 'clipReveal', label: 'Clip Reveal' },
+  { key: 'textStagger', label: 'Text Stagger' },
+  { key: 'imageScaleOnScroll', label: 'Image Scale' },
+  { key: 'parallaxImage', label: 'Parallax Image' },
+  { key: 'stickyNarrative', label: 'Sticky Narrative' },
+  { key: 'horizontalScroll', label: 'Horizontal Scroll' },
+  { key: 'marquee', label: 'Marquee Drift' },
+  { key: 'stackedCards', label: 'Stacked Cards' },
+  { key: 'sectionPin', label: 'Section Pin' },
+  { key: 'fadeSettle', label: 'Fade Settle' },
+  { key: 'none', label: 'None (Static)' },
 ];
 
 const categoryTabs = [
@@ -48,20 +76,51 @@ const categoryTabs = [
 ];
 
 export function ComponentSandboxView() {
-  const [selectedComponentId, setSelectedComponentId] = useState<string>(studioComponentCatalog[0].id);
+  const [components, setComponents] = useState<ComponentDefinition[]>(() =>
+    componentRegistryRepository.getSynchronous()
+  );
+
+  useEffect(() => {
+    const unsubscribe = componentRegistryRepository.subscribe((latest) => {
+      setComponents(latest);
+    });
+    return unsubscribe;
+  }, []);
+
+  const [selectedComponentId, setSelectedComponentId] = useState<string>(
+    components[0]?.id || 'nav-minimal-dock-01'
+  );
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Sandbox environmental controls
-  const [industryPreset, setIndustryPreset] = useState<IndustryPresetKey>('architecture');
+  const [industryPreset, setIndustryPreset] = useState<StudioIndustryPreset>('atelier_luxury');
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
   const [direction, setDirection] = useState<ComponentDirection>('ltr');
   const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
+  const [contentMode, setContentMode] = useState<'preview' | 'production'>('preview');
+  const [motionEnabled, setMotionEnabled] = useState<boolean>(true);
+  const [motionPreset, setMotionPreset] = useState<StudioMotionPreset>('fadeReveal');
   const [actionLog, setActionLog] = useState<{ action: string; payload: any; timestamp: string }[]>([]);
+
+  // Computed Governance & Verification Stats
+  const approvedComponents = useMemo(() => components.filter((c) => c.status === 'approved'), [components]);
+  const candidatesCount = useMemo(() => components.filter((c) => c.status === 'candidate').length, [components]);
+  const rtlReadyCount = useMemo(
+    () => approvedComponents.filter((c) => c.rtlReady === true).length,
+    [approvedComponents]
+  );
+  const unverifiedMobileCount = useMemo(
+    () =>
+      approvedComponents.filter(
+        (c) => !c.mobileVerificationStatus || c.mobileVerificationStatus === 'untested'
+      ).length,
+    [approvedComponents]
+  );
 
   // Filter components
   const filteredComponents = useMemo(() => {
-    return studioComponentCatalog.filter((item) => {
+    return components.filter((item) => {
       if (activeCategory !== 'all' && item.category !== activeCategory) {
         return false;
       }
@@ -77,15 +136,19 @@ export function ComponentSandboxView() {
       }
       return true;
     });
-  }, [activeCategory, searchQuery]);
+  }, [components, activeCategory, searchQuery]);
 
-  const activeItem = useMemo(() => {
-    return studioComponentCatalog.find((c) => c.id === selectedComponentId) || studioComponentCatalog[0];
-  }, [selectedComponentId]);
+  const activeItem: ComponentDefinition = useMemo(() => {
+    return components.find((c) => c.id === selectedComponentId) || components[0] || ({} as ComponentDefinition);
+  }, [components, selectedComponentId]);
+
+  const hasImplementation = useMemo(() => {
+    return activeItem?.id ? hasStudioComponentImplementation(activeItem.id) : false;
+  }, [activeItem]);
 
   const ActiveComponent = useMemo(() => {
-    return getStudioComponent(activeItem.id);
-  }, [activeItem.id]);
+    return activeItem?.id ? getStudioComponent(activeItem.id) : null;
+  }, [activeItem]);
 
   const handleAction = (action: string, payload: any) => {
     setActionLog((prev) => [
@@ -94,6 +157,8 @@ export function ComponentSandboxView() {
     ]);
   };
 
+  const isIndustryKnown = isKnownIndustryPreset(industryPreset);
+  const activeTokens = getDesignTokensForIndustry(industryPreset, themeMode === 'dark' ? 'dark' : 'light');
   const viewportWidth = previewMode === 'mobile' ? '390px' : previewMode === 'tablet' ? '768px' : '100%';
 
   return (
@@ -108,11 +173,11 @@ export function ComponentSandboxView() {
             Interactive Design Sandbox
           </h1>
           <p style={{ fontSize: '14px', color: '#9d9da5', margin: 0, maxWidth: '640px', lineHeight: 1.5 }}>
-            Every component is platform-neutral, responds to mathematical design tokens, natively mirrors in Hebrew (RTL), and complies with strict anti-slop rules.
+            Production-grade sandbox for testing mathematical tokens, motion choreography, bidirectional RTL, and preview vs. production content modes.
           </p>
         </div>
 
-        {/* Global Stats Badge */}
+        {/* Real Computed Governance Stats (No hardcoded 100% or marketing claims) */}
         <div
           style={{
             display: 'flex',
@@ -125,183 +190,311 @@ export function ComponentSandboxView() {
           }}
         >
           <div>
-            <div style={{ fontSize: '10px', color: '#6f6f79', textTransform: 'uppercase', fontFamily: 'monospace' }}>Total Components</div>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: '#f3f3f1', fontFamily: 'monospace' }}>
-              {studioComponentCatalog.length} / 40
+            <div style={{ fontSize: '10px', color: '#6f6f79', textTransform: 'uppercase', fontFamily: 'monospace' }}>Approved / Total</div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#f3f3f1', fontFamily: 'monospace' }}>
+              {approvedComponents.length} / {components.length}
             </div>
           </div>
           <div style={{ height: '24px', width: '1px', backgroundColor: '#26262b' }} />
           <div>
-            <div style={{ fontSize: '10px', color: '#6f6f79', textTransform: 'uppercase', fontFamily: 'monospace' }}>RTL Verified</div>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: '#2e7d32', fontFamily: 'monospace' }}>
-              100%
+            <div style={{ fontSize: '10px', color: '#6f6f79', textTransform: 'uppercase', fontFamily: 'monospace' }}>RTL Supported</div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#4ade80', fontFamily: 'monospace' }}>
+              {rtlReadyCount} / {approvedComponents.length}
             </div>
           </div>
           <div style={{ height: '24px', width: '1px', backgroundColor: '#26262b' }} />
           <div>
-            <div style={{ fontSize: '10px', color: '#6f6f79', textTransform: 'uppercase', fontFamily: 'monospace' }}>Zero-Slop</div>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: '#d6a84f', fontFamily: 'monospace' }}>
-              Pass
+            <div style={{ fontSize: '10px', color: '#6f6f79', textTransform: 'uppercase', fontFamily: 'monospace' }}>Mobile Audit</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: unverifiedMobileCount > 0 ? '#eab308' : '#4ade80', fontFamily: 'monospace' }}>
+              {unverifiedMobileCount > 0 ? `${unverifiedMobileCount} unverified` : 'All Verified'}
             </div>
           </div>
+          {candidatesCount > 0 && (
+            <>
+              <div style={{ height: '24px', width: '1px', backgroundColor: '#26262b' }} />
+              <div>
+                <div style={{ fontSize: '10px', color: '#6f6f79', textTransform: 'uppercase', fontFamily: 'monospace' }}>Candidates</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: '#d6a84f', fontFamily: 'monospace' }}>
+                  {candidatesCount}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Control Bar: Industry Presets, Theme, Direction, Viewport */}
+      {/* Control Bar: Industry, Motion, Content Mode, Theme, RTL, Viewport */}
       <div
         style={{
           display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
+          flexDirection: 'column',
+          gap: '12px',
           padding: '16px 20px',
           backgroundColor: '#121215',
           borderRadius: '8px',
           border: '1px solid #26262b',
         }}
       >
-        {/* Left: Industry Preset Picker */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Sliders size={16} color="#d6a84f" />
-          <label style={{ fontSize: '12px', fontWeight: 600, color: '#9d9da5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Industry Preset:
-          </label>
-          <select
-            value={industryPreset}
-            onChange={(e) => setIndustryPreset(e.target.value as IndustryPresetKey)}
-            style={{
-              backgroundColor: '#1a1a1e',
-              border: '1px solid #333339',
-              color: '#f3f3f1',
-              padding: '6px 12px',
-              borderRadius: '6px',
-              fontSize: '13px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            {industryOptions.map((opt) => (
-              <option key={opt.key} value={opt.key}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+          {/* Industry Preset Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Sliders size={15} color="#d6a84f" />
+            <label style={{ fontSize: '12px', fontWeight: 600, color: '#9d9da5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Industry Preset:
+            </label>
+            <select
+              id="sandbox-industry-selector"
+              value={industryPreset}
+              onChange={(e) => setIndustryPreset(e.target.value as StudioIndustryPreset)}
+              style={{
+                backgroundColor: '#1a1a1f',
+                color: '#f3f3f1',
+                border: '1px solid #333339',
+                borderRadius: '6px',
+                padding: '6px 12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {industryOptions.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: '11px', color: '#6f6f79', maxWidth: '300px' }}>
+              {industryOptions.find((o) => o.key === industryPreset)?.desc}
+            </span>
+          </div>
+
+          {/* Motion & Content Mode Toggles */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Motion On / Off */}
+            <button
+              id="sandbox-motion-toggle"
+              type="button"
+              onClick={() => setMotionEnabled((prev) => !prev)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: motionEnabled ? '#1e293b' : '#18181c',
+                color: motionEnabled ? '#38bdf8' : '#777780',
+                border: `1px solid ${motionEnabled ? '#0284c7' : '#333339'}`,
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <Zap size={13} />
+              <span>Motion: {motionEnabled ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Motion Preset Selector */}
+            <select
+              id="sandbox-motion-preset-select"
+              disabled={!motionEnabled}
+              value={motionPreset}
+              onChange={(e) => setMotionPreset(e.target.value as StudioMotionPreset)}
+              style={{
+                backgroundColor: '#1a1a1f',
+                color: motionEnabled ? '#f3f3f1' : '#6f6f79',
+                border: '1px solid #333339',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '12px',
+                outline: 'none',
+                cursor: motionEnabled ? 'pointer' : 'not-allowed',
+                opacity: motionEnabled ? 1 : 0.6,
+              }}
+            >
+              {motionPresetOptions.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Content Mode (Preview vs Production) */}
+            <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333339' }}>
+              <button
+                id="sandbox-content-mode-preview"
+                type="button"
+                onClick={() => setContentMode('preview')}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: contentMode === 'preview' ? '#292930' : '#141417',
+                  color: contentMode === 'preview' ? '#f3f3f1' : '#777780',
+                  border: 'none',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Preview Demo
+              </button>
+              <button
+                id="sandbox-content-mode-production"
+                type="button"
+                onClick={() => setContentMode('production')}
+                title="Strict production mode: hides fabricated ratings, fake reviews, and unverified guarantees"
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: contentMode === 'production' ? '#14301d' : '#141417',
+                  color: contentMode === 'production' ? '#4ade80' : '#777780',
+                  border: 'none',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Production Mode
+              </button>
+            </div>
+
+            {/* RTL Direction Toggle */}
+            <button
+              id="sandbox-direction-toggle"
+              type="button"
+              onClick={() => setDirection((prev) => (prev === 'ltr' ? 'rtl' : 'ltr'))}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: direction === 'rtl' ? '#332314' : '#141417',
+                color: direction === 'rtl' ? '#d6a84f' : '#f3f3f1',
+                border: `1px solid ${direction === 'rtl' ? '#d6a84f' : '#333339'}`,
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <ArrowRightLeft size={13} />
+              <span>{direction === 'rtl' ? 'עברית (RTL)' : 'English (LTR)'}</span>
+            </button>
+
+            {/* Theme Toggle */}
+            <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333339' }}>
+              <button
+                id="sandbox-theme-dark"
+                type="button"
+                onClick={() => setThemeMode('dark')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  backgroundColor: themeMode === 'dark' ? '#292930' : '#141417',
+                  color: themeMode === 'dark' ? '#f3f3f1' : '#777780',
+                  border: 'none',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Moon size={13} />
+                <span>Dark</span>
+              </button>
+              <button
+                id="sandbox-theme-light"
+                type="button"
+                onClick={() => setThemeMode('light')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  backgroundColor: themeMode === 'light' ? '#e5e5e0' : '#141417',
+                  color: themeMode === 'light' ? '#111' : '#777780',
+                  border: 'none',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Sun size={13} />
+                <span>Light</span>
+              </button>
+            </div>
+
+            {/* Viewport Toggles */}
+            <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333339' }}>
+              <button
+                id="sandbox-viewport-desktop"
+                type="button"
+                title="Desktop 100%"
+                onClick={() => setPreviewMode('desktop')}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: previewMode === 'desktop' ? '#292930' : '#141417',
+                  color: previewMode === 'desktop' ? '#f3f3f1' : '#777780',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Monitor size={15} />
+              </button>
+              <button
+                id="sandbox-viewport-tablet"
+                type="button"
+                title="Tablet 768px"
+                onClick={() => setPreviewMode('tablet')}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: previewMode === 'tablet' ? '#292930' : '#141417',
+                  color: previewMode === 'tablet' ? '#f3f3f1' : '#777780',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Tablet size={15} />
+              </button>
+              <button
+                id="sandbox-viewport-mobile"
+                type="button"
+                title="Mobile 390px"
+                onClick={() => setPreviewMode('mobile')}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: previewMode === 'mobile' ? '#292930' : '#141417',
+                  color: previewMode === 'mobile' ? '#f3f3f1' : '#777780',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Smartphone size={15} />
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Middle & Right: Viewport, Theme, RTL Toggles */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* RTL Toggle */}
-          <button
-            type="button"
-            onClick={() => setDirection((d: ComponentDirection) => (d === 'ltr' ? 'rtl' : 'ltr'))}
+        {/* Fallback Warning if unknown industry preset */}
+        {!isIndustryKnown && (
+          <div
             style={{
-              display: 'inline-flex',
+              padding: '8px 12px',
+              backgroundColor: '#382810',
+              border: '1px solid #854d0e',
+              borderRadius: '6px',
+              display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
-              borderRadius: '6px',
-              backgroundColor: direction === 'rtl' ? '#d6a84f' : '#1a1a1e',
-              color: direction === 'rtl' ? '#111' : '#f3f3f1',
-              border: '1px solid ' + (direction === 'rtl' ? '#d6a84f' : '#333339'),
-              fontSize: '12.5px',
-              fontWeight: 600,
-              cursor: 'pointer',
+              gap: '8px',
+              fontSize: '12px',
+              color: '#fef08a',
             }}
           >
-            <ArrowRightLeft size={14} />
-            <span>{direction === 'rtl' ? 'RTL עברית (Active)' : 'LTR Standard'}</span>
-          </button>
-
-          {/* Theme Mode Toggle */}
-          <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333339' }}>
-            <button
-              type="button"
-              onClick={() => setThemeMode('dark')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 12px',
-                backgroundColor: themeMode === 'dark' ? '#292930' : '#141417',
-                color: themeMode === 'dark' ? '#f3f3f1' : '#777780',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <Moon size={13} />
-              <span>Dark</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setThemeMode('light')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 12px',
-                backgroundColor: themeMode === 'light' ? '#e5e5e0' : '#141417',
-                color: themeMode === 'light' ? '#111' : '#777780',
-                border: 'none',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <Sun size={13} />
-              <span>Light</span>
-            </button>
+            <AlertTriangle size={14} color="#fef08a" />
+            <span>
+              Preset &ldquo;{industryPreset}&rdquo; is not a recognized preset key. Falling back cleanly to <strong>atelier_luxury</strong>.
+            </span>
           </div>
-
-          {/* Viewport Width Toggles */}
-          <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #333339' }}>
-            <button
-              type="button"
-              title="Desktop 100%"
-              onClick={() => setPreviewMode('desktop')}
-              style={{
-                padding: '6px 10px',
-                backgroundColor: previewMode === 'desktop' ? '#292930' : '#141417',
-                color: previewMode === 'desktop' ? '#f3f3f1' : '#777780',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <Monitor size={15} />
-            </button>
-            <button
-              type="button"
-              title="Tablet 768px"
-              onClick={() => setPreviewMode('tablet')}
-              style={{
-                padding: '6px 10px',
-                backgroundColor: previewMode === 'tablet' ? '#292930' : '#141417',
-                color: previewMode === 'tablet' ? '#f3f3f1' : '#777780',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <Tablet size={15} />
-            </button>
-            <button
-              type="button"
-              title="Mobile 390px"
-              onClick={() => setPreviewMode('mobile')}
-              style={{
-                padding: '6px 10px',
-                backgroundColor: previewMode === 'mobile' ? '#292930' : '#141417',
-                color: previewMode === 'mobile' ? '#f3f3f1' : '#777780',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <Smartphone size={15} />
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Main Sandbox Grid: Left Sidebar Component Browser + Right Stage */}
@@ -331,6 +524,7 @@ export function ComponentSandboxView() {
           <div style={{ position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#6f6f79' }} />
             <input
+              id="sandbox-search-input"
               type="text"
               placeholder="Search components or tags..."
               value={searchQuery}
@@ -378,9 +572,11 @@ export function ComponentSandboxView() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {filteredComponents.map((item) => {
               const isSelected = item.id === activeItem.id;
+              const isApproved = item.status === 'approved';
               return (
                 <button
                   key={item.id}
+                  id={`sandbox-select-${item.id}`}
                   type="button"
                   onClick={() => setSelectedComponentId(item.id)}
                   style={{
@@ -407,11 +603,11 @@ export function ComponentSandboxView() {
                         fontFamily: 'monospace',
                         padding: '1px 5px',
                         borderRadius: '3px',
-                        backgroundColor: '#18181c',
-                        color: '#9d9da5',
+                        backgroundColor: isApproved ? '#18181c' : '#332314',
+                        color: isApproved ? '#9d9da5' : '#d6a84f',
                       }}
                     >
-                      {item.category}
+                      {item.status}
                     </span>
                   </div>
                   <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#6f6f79' }}>
@@ -425,7 +621,7 @@ export function ComponentSandboxView() {
 
         {/* RIGHT COLUMN: Stage & Inspector */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Metadata Card */}
+          {/* Metadata & Governance Inspector Card */}
           <div
             style={{
               padding: '18px 24px',
@@ -448,12 +644,12 @@ export function ComponentSandboxView() {
                       fontSize: '10px',
                       padding: '2px 6px',
                       borderRadius: '3px',
-                      backgroundColor: '#1b3320',
-                      color: '#4ade80',
+                      backgroundColor: activeItem.status === 'approved' ? '#1b3320' : '#382810',
+                      color: activeItem.status === 'approved' ? '#4ade80' : '#fef08a',
                       fontWeight: 600,
                     }}
                   >
-                    APPROVED V1
+                    {activeItem.status === 'approved' ? 'APPROVED V1' : 'EXTERNAL CANDIDATE'}
                   </span>
                 </div>
                 <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f3f3f1', margin: '4px 0 0 0' }}>
@@ -464,7 +660,7 @@ export function ComponentSandboxView() {
                 </p>
               </div>
 
-              {/* Badges */}
+              {/* Verified Badges */}
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <span
                   style={{
@@ -476,7 +672,7 @@ export function ComponentSandboxView() {
                     color: '#c4c4cc',
                   }}
                 >
-                  Motion: <strong>{activeItem.motionLevel}</strong>
+                  Motion: <strong>{activeItem.motionLevel || 'subtle'}</strong>
                 </span>
                 <span
                   style={{
@@ -488,7 +684,11 @@ export function ComponentSandboxView() {
                     color: '#c4c4cc',
                   }}
                 >
-                  Mobile: <strong>★ {activeItem.mobileQuality}.0</strong>
+                  Mobile:{' '}
+                  <strong>
+                    ★ {activeItem.mobileQuality || 5}.0{' '}
+                    {activeItem.mobileVerificationStatus && activeItem.mobileVerificationStatus !== 'untested' ? '(verified)' : '(unverified)'}
+                  </strong>
                 </span>
                 <span
                   style={{
@@ -500,30 +700,111 @@ export function ComponentSandboxView() {
                     color: '#c4c4cc',
                   }}
                 >
-                  RTL: <strong>Native Verified</strong>
+                  RTL:{' '}
+                  <strong>
+                    {activeItem.rtlReady
+                      ? activeItem.rtlVerificationStatus && activeItem.rtlVerificationStatus !== 'untested'
+                        ? 'Native Verified'
+                        : 'Supported'
+                      : 'Not Verified'}
+                  </strong>
                 </span>
               </div>
+            </div>
+
+            {/* Provenance & Governance Info */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '12px',
+                padding: '12px',
+                borderRadius: '6px',
+                backgroundColor: '#17171b',
+                border: '1px solid #26262b',
+                fontSize: '11.5px',
+              }}
+            >
+              <div>
+                <span style={{ color: '#6f6f79' }}>Provenance Source: </span>
+                <strong style={{ color: '#f3f3f1' }}>{activeItem.source || 'internal'}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#6f6f79' }}>Author / Creator: </span>
+                <span style={{ color: '#c4c4cc' }}>{activeItem.sourceAuthor || 'Natanel Studio'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#6f6f79' }}>License: </span>
+                <span style={{ color: '#c4c4cc' }}>{activeItem.license || 'MIT'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#6f6f79' }}>Implementation: </span>
+                <span style={{ color: hasImplementation ? '#4ade80' : '#eab308' }}>
+                  {hasImplementation ? 'Renderable React' : 'Metadata Only (Placeholder)'}
+                </span>
+              </div>
+              {activeItem.sourceUrl && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <span style={{ color: '#6f6f79' }}>Source URL: </span>
+                  <a
+                    href={activeItem.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: '#d6a84f', textDecoration: 'underline' }}
+                  >
+                    {activeItem.sourceUrl}
+                  </a>
+                </div>
+              )}
+              {activeItem.transformationNotes && (
+                <div style={{ gridColumn: '1 / -1', color: '#9d9da5', fontStyle: 'italic' }}>
+                  Transformation Notes: {activeItem.transformationNotes}
+                </div>
+              )}
             </div>
 
             {/* Tags row */}
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px' }}>
               <div>
                 <span style={{ color: '#6f6f79' }}>Industries: </span>
-                <span style={{ color: '#c4c4cc' }}>{activeItem.industryFit.join(', ')}</span>
+                <span style={{ color: '#c4c4cc' }}>{activeItem.industryFit?.join(', ')}</span>
               </div>
               <div>
                 <span style={{ color: '#6f6f79' }}>Styles: </span>
-                <span style={{ color: '#c4c4cc' }}>{activeItem.styleTags.join(', ')}</span>
+                <span style={{ color: '#c4c4cc' }}>{activeItem.styleTags?.join(', ')}</span>
               </div>
               <div>
                 <span style={{ color: '#6f6f79' }}>Conversion Goals: </span>
-                <span style={{ color: '#d6a84f' }}>{activeItem.conversionPurpose.join(', ')}</span>
+                <span style={{ color: '#d6a84f' }}>{activeItem.conversionPurpose?.join(', ')}</span>
               </div>
             </div>
           </div>
 
+          {/* Content Mode Notice if in Production Mode */}
+          {contentMode === 'production' && (
+            <div
+              style={{
+                padding: '10px 16px',
+                borderRadius: '6px',
+                backgroundColor: '#122316',
+                border: '1px solid #166534',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '12px',
+                color: '#86efac',
+              }}
+            >
+              <FileCheck size={16} color="#86efac" />
+              <span>
+                <strong>Strict Production Content Mode:</strong> Demonstration claims, fake star ratings, unverified review counts, and mock license numbers are suppressed.
+              </span>
+            </div>
+          )}
+
           {/* THE LIVE RENDERED STAGE */}
           <div
+            id="sandbox-live-stage"
             style={{
               borderRadius: '8px',
               border: '1px solid #26262b',
@@ -546,13 +827,25 @@ export function ComponentSandboxView() {
                 backgroundColor: themeMode === 'dark' ? '#0c0c0e' : '#fafafa',
               }}
             >
-              <ActiveComponent
-                industryPreset={industryPreset}
-                themeMode={themeMode}
-                direction={direction}
-                previewMode={previewMode}
-                onAction={handleAction}
-              />
+              {ActiveComponent ? (
+                <StudioMotionWrapper
+                  preset={motionPreset}
+                  enabled={motionEnabled}
+                  direction={direction}
+                >
+                  <ActiveComponent
+                    contentMode={contentMode}
+                    industryPreset={industryPreset}
+                    themeMode={themeMode}
+                    direction={direction}
+                    previewMode={previewMode}
+                    motionEnabled={motionEnabled}
+                    motionPreset={motionPreset}
+                    designTokens={activeTokens}
+                    onAction={handleAction}
+                  />
+                </StudioMotionWrapper>
+              ) : null}
             </div>
           </div>
 
@@ -570,25 +863,42 @@ export function ComponentSandboxView() {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontFamily: 'monospace', color: '#d6a84f', fontWeight: 700, textTransform: 'uppercase' }}>
-                  <Zap size={13} />
-                  <span>Interactive Action Log (Telemetry)</span>
-                </div>
+                <span style={{ fontSize: '11px', fontFamily: 'monospace', textTransform: 'uppercase', color: '#6f6f79' }}>
+                  Interactive Event Dispatcher Log
+                </span>
                 <button
                   type="button"
                   onClick={() => setActionLog([])}
-                  style={{ background: 'transparent', border: 'none', color: '#6f6f79', fontSize: '11px', cursor: 'pointer' }}
+                  style={{
+                    fontSize: '11px',
+                    color: '#9d9da5',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
                 >
-                  Clear
+                  Clear Log
                 </button>
               </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '100px', overflowY: 'auto' }}>
-                {actionLog.map((log, idx) => (
-                  <div key={idx} style={{ fontSize: '11.5px', fontFamily: 'monospace', color: '#a0a0a8', display: 'flex', gap: '12px' }}>
-                    <span style={{ color: '#5b5b64' }}>{log.timestamp}</span>
-                    <strong style={{ color: '#f3f3f1' }}>{log.action}</strong>
-                    <span style={{ color: '#888892' }}>{JSON.stringify(log.payload)}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {actionLog.map((log, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: '#17171b',
+                    }}
+                  >
+                    <span style={{ color: '#6f6f79' }}>[{log.timestamp}]</span>
+                    <span style={{ color: '#d6a84f', fontWeight: 600 }}>{log.action}</span>
+                    <span style={{ color: '#a0a0aa' }}>{JSON.stringify(log.payload)}</span>
                   </div>
                 ))}
               </div>

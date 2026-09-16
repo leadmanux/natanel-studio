@@ -227,13 +227,17 @@ export const industryDesignTokenPresets: Record<StudioIndustryPreset, { dark: St
   },
 };
 
+export function isKnownIndustryPreset(industry?: string): industry is StudioIndustryPreset {
+  if (!industry) return false;
+  return industry in industryDesignTokenPresets;
+}
+
 export function getDesignTokensForIndustry(
   industry?: string,
   mode: 'dark' | 'light' = 'dark'
 ): StudioDesignTokens {
-  const key = (industry as StudioIndustryPreset) in industryDesignTokenPresets
-    ? (industry as StudioIndustryPreset)
-    : 'atelier_luxury';
+  const isKnown = isKnownIndustryPreset(industry);
+  const key: StudioIndustryPreset = isKnown ? industry : 'atelier_luxury';
 
   return industryDesignTokenPresets[key][mode];
 }

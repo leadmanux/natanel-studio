@@ -25,6 +25,31 @@ export function ReviewSummaryBar(props: StudioComponentProps<ReviewSummaryConten
         { name: 'Houzz Pro Best of Design', score: '5.0', count: '46 reviews' },
       ];
 
+  const isProduction = props.contentMode === 'production';
+  const hasCustomScore = Boolean(props.content?.score);
+
+  if (isProduction && !hasCustomScore) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: '24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-surface)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--studio-muted)', fontStyle: 'italic' }}>
+            {isRtl
+              ? 'ביקורות לקוחות מאומתות יפורסמו בהתאם לנתוני Google Business / Trustpilot המחוברים לפרויקט.'
+              : 'Verified customer reviews will be rendered once connected to Google Business or Trustpilot API.'}
+          </p>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
   const score = props.content?.score || '4.98';
   const total = props.content?.totalReviews || (isRtl ? '258 חוות דעת של לקוחות פרימיום' : '258 verified sovereign reviews');
   const platforms = props.content?.platforms || defaultPlatforms;

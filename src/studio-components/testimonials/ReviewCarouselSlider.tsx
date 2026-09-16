@@ -75,7 +75,45 @@ export function ReviewCarouselSlider(props: StudioComponentProps<ReviewCarouselC
         },
       ];
 
+  const isProduction = props.contentMode === 'production';
+  const hasCustomReviews = Boolean(props.content?.reviews && props.content.reviews.length > 0);
   const headline = props.content?.headline || (isRtl ? 'חוות דעת של לקוחות הסטודיו' : 'Audited Client Testimonials');
+
+  if (isProduction && !hasCustomReviews) {
+    return (
+      <StudioComponentWrapper {...props}>
+        <section
+          style={{
+            width: '100%',
+            padding: 'var(--studio-section-space) 24px',
+            borderBottom: '1px solid var(--studio-border)',
+            backgroundColor: 'var(--studio-bg)',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <h2
+              style={{
+                fontFamily: 'var(--studio-font-display)',
+                fontSize: '24px',
+                fontWeight: 600,
+                color: 'var(--studio-text)',
+                marginBottom: '12px',
+              }}
+            >
+              {headline}
+            </h2>
+            <p style={{ fontStyle: 'italic', color: 'var(--studio-muted)', fontSize: '14px', margin: 0 }}>
+              {isRtl
+                ? 'עדויות לקוחות מאומתות יפורסמו לאחר קבלת אישור הלקוחות או חיבור API לפרויקט.'
+                : 'Verified client reviews and case appraisals will be displayed here once authorized or connected via API.'}
+            </p>
+          </div>
+        </section>
+      </StudioComponentWrapper>
+    );
+  }
+
   const reviews = props.content?.reviews || defaultReviews;
   const current = reviews[activeIdx] || reviews[0];
 

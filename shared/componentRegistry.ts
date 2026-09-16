@@ -27,19 +27,33 @@ export interface ImageRequirement {
   required: boolean;
 }
 
+export type VerificationStatus = 'untested' | 'manually_verified' | 'automated_verified';
+
 export interface ComponentDefinition {
   id: string;
   name: string;
   category: ComponentCategory;
   description: string;
-  source: 'internal' | 'magic-ui' | 'motion-primitives' | 'kokonut-ui' | 'custom' | string;
+  source: 'internal' | 'magic-ui' | 'motion-primitives' | 'kokonut-ui' | '21st-dev' | 'custom' | string;
+  sourceUrl?: string | null;
+  sourceAuthor?: string;
+  upstreamComponent?: string | null;
+  originalCategory?: string | null;
+  transformationNotes?: string;
+  version?: string;
+  dateImported?: string;
+  renderImplementationId?: string;
+  supportedProjectTypes?: string[];
+  supportedDirections?: ('ltr' | 'rtl')[];
   license: string;
   tags: string[];
   industryFit: string[];
   styleTags: string[];
   conversionPurpose: string[];
   mobileQuality: 1 | 2 | 3 | 4 | 5;
+  mobileVerificationStatus?: VerificationStatus;
   rtlReady: boolean;
+  rtlVerificationStatus?: VerificationStatus;
   motionLevel: 'none' | 'subtle' | 'moderate' | 'advanced';
   imageRequirements: ImageRequirement[];
   dependencies: string[];
@@ -49,7 +63,7 @@ export interface ComponentDefinition {
   status: 'candidate' | 'approved' | 'rejected' | 'draft' | 'deprecated';
 }
 
-export const demoComponents: ComponentDefinition[] = [
+const rawDemoComponents: ComponentDefinition[] = [
   {
     id: 'hero-editorial-split-01',
     name: 'Editorial Split Hero',
@@ -95,8 +109,8 @@ export const demoComponents: ComponentDefinition[] = [
     name: 'Restrained Studio Nav',
     category: 'navigation',
     description: 'Floating or border-docked minimal navigation with pristine RTL alignment and contact trigger.',
-    source: 'motion-primitives',
-    license: 'MIT',
+    source: 'internal',
+    license: 'Proprietary Studio',
     tags: ['navigation', 'dock', 'sticky'],
     industryFit: ['all', 'creative', 'agency', 'ecommerce'],
     styleTags: ['minimal', 'restrained'],
@@ -107,7 +121,7 @@ export const demoComponents: ComponentDefinition[] = [
     imageRequirements: [],
     dependencies: ['lucide-react'],
     framework: 'platform-neutral',
-    codeLocation: 'src/components/registry/demo/StudioNav.tsx',
+    codeLocation: 'src/studio-components/navigation/TransparentRestrainedNav.tsx',
     status: 'approved',
   },
   {
@@ -158,8 +172,8 @@ export const demoComponents: ComponentDefinition[] = [
     name: 'Typographic Services Matrix',
     category: 'services',
     description: 'Textured typographic service tiers without generic icon boxes or card proliferation.',
-    source: 'magic-ui',
-    license: 'MIT',
+    source: 'internal',
+    license: 'Proprietary Studio',
     tags: ['services', 'editorial', 'cards-alternative'],
     industryFit: ['consulting', 'law', 'advisory', 'architecture'],
     styleTags: ['typographic', 'restrained', 'sophisticated'],
@@ -170,7 +184,7 @@ export const demoComponents: ComponentDefinition[] = [
     imageRequirements: [],
     dependencies: [],
     framework: 'platform-neutral',
-    codeLocation: 'src/components/registry/demo/ServicesMatrix.tsx',
+    codeLocation: 'src/studio-components/services/TypographicServicesMatrix.tsx',
     status: 'approved',
   },
   {
@@ -198,8 +212,8 @@ export const demoComponents: ComponentDefinition[] = [
     name: 'High-Intent Frictionless Inquiry',
     category: 'forms',
     description: 'Structured proposal intake form with clear value exchange and native RTL micro-interactions.',
-    source: 'kokonut-ui',
-    license: 'MIT',
+    source: 'internal',
+    license: 'Proprietary Studio',
     tags: ['lead-capture', 'inquiry', 'cro'],
     industryFit: ['lead-gen', 'agency', 'contractors', 'luxury-services'],
     styleTags: ['direct', 'tactile', 'minimal'],
@@ -210,7 +224,7 @@ export const demoComponents: ComponentDefinition[] = [
     imageRequirements: [],
     dependencies: [],
     framework: 'platform-neutral',
-    codeLocation: 'src/components/registry/demo/InquiryForm.tsx',
+    codeLocation: 'src/studio-components/forms/MultiStepIntakeForm.tsx',
     status: 'approved',
   },
   {
@@ -258,8 +272,8 @@ export const demoComponents: ComponentDefinition[] = [
     name: 'Editorial Product Showcase Reel',
     category: 'ecommerce',
     description: 'Clean product catalog reel with direct Shopify cart integration and tactile image hover.',
-    source: 'kokonut-ui',
-    license: 'MIT',
+    source: 'internal',
+    license: 'Proprietary Studio',
     tags: ['shopify', 'catalog', 'ecommerce'],
     industryFit: ['shopify', 'ecommerce', 'fashion', 'homeware'],
     styleTags: ['editorial', 'commerce'],
@@ -943,13 +957,24 @@ export const demoComponents: ComponentDefinition[] = [
     category: 'features',
     description: 'Candidate component featuring asymmetric feature groupings; pending visual rhythm verification.',
     source: '21st-dev',
+    sourceUrl: 'https://21st.dev/community/bento-grid',
+    sourceAuthor: 'Community Contributor',
+    upstreamComponent: 'BentoGridVariantB',
+    originalCategory: 'Grid Layouts',
+    transformationNotes: 'Registered external candidate specification. Render implementation pending.',
+    version: '0.1.0',
+    dateImported: '2026-03-05',
+    supportedProjectTypes: ['technology', 'software'],
+    supportedDirections: ['ltr'],
     license: 'MIT',
     tags: ['grid', 'experimental', 'candidate'],
     industryFit: ['technology', 'software'],
     styleTags: ['modern', 'experimental'],
     conversionPurpose: ['feature-tour'],
     mobileQuality: 3,
+    mobileVerificationStatus: 'untested',
     rtlReady: false,
+    rtlVerificationStatus: 'untested',
     motionLevel: 'moderate',
     imageRequirements: [],
     dependencies: [],
@@ -962,14 +987,22 @@ export const demoComponents: ComponentDefinition[] = [
     name: 'Generic SaaS Card Cluster',
     category: 'hero',
     description: 'Rejected cliché design with purple-to-cyan gradient background and excessive floating cards.',
-    source: 'custom',
-    license: 'Proprietary',
+    source: 'internal',
+    sourceAuthor: 'Natanel Studio Quality Review',
+    transformationNotes: 'Permanently rejected generic AI cliché with purple-to-cyan gradient and cluttered cards.',
+    version: '1.0.0',
+    dateImported: '2026-02-15',
+    supportedProjectTypes: [],
+    supportedDirections: ['ltr'],
+    license: 'Proprietary Studio',
     tags: ['rejected', 'cliche', 'generic-ai'],
     industryFit: ['none'],
     styleTags: ['glassmorphism', 'purple-gradient'],
     conversionPurpose: ['none'],
     mobileQuality: 2,
+    mobileVerificationStatus: 'untested',
     rtlReady: false,
+    rtlVerificationStatus: 'untested',
     motionLevel: 'advanced',
     imageRequirements: [],
     dependencies: [],
@@ -978,3 +1011,20 @@ export const demoComponents: ComponentDefinition[] = [
     status: 'rejected',
   },
 ];
+
+export const demoComponents: ComponentDefinition[] = rawDemoComponents.map((item) => ({
+  sourceUrl: item.source === 'internal' ? null : (item.sourceUrl ?? null),
+  sourceAuthor: item.sourceAuthor ?? (item.source === 'internal' ? 'Natanel Studio' : 'External Author'),
+  upstreamComponent: item.upstreamComponent ?? null,
+  originalCategory: item.originalCategory ?? null,
+  transformationNotes: item.transformationNotes ?? (item.source === 'internal' ? 'Original Natanel Studio zero-slop component with bidirectional RTL compliance.' : 'External candidate specification.'),
+  version: item.version ?? '1.0.0',
+  dateImported: item.dateImported ?? '2026-03-01',
+  renderImplementationId: item.renderImplementationId ?? (item.status === 'approved' ? item.id : undefined),
+  supportedProjectTypes: item.supportedProjectTypes ?? ['custom', 'lead_generation', 'ecommerce', 'portfolio', 'corporate'],
+  supportedDirections: item.supportedDirections ?? (item.rtlReady ? ['ltr', 'rtl'] : ['ltr']),
+  mobileVerificationStatus: item.mobileVerificationStatus ?? 'untested',
+  rtlVerificationStatus: item.rtlVerificationStatus ?? (item.rtlReady ? 'manually_verified' : 'untested'),
+  ...item,
+}));
+

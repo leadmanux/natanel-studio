@@ -94,7 +94,11 @@ export function ProductGridCardRow(props: StudioComponentProps<ProductGridConten
 
   const eyebrow = props.content?.eyebrow || (isRtl ? 'אובייקטים ועיצוב משלים' : 'THE LIVING COLLECTION');
   const title = props.content?.title || (isRtl ? 'פריטי אספנות ומהדורות מוגבלות' : 'Architectural Objects & Limited Editions');
-  const products = props.content?.products || defaultProducts;
+  const isProduction = props.contentMode === 'production';
+  const rawProducts = props.content?.products || defaultProducts;
+  const products = isProduction && !props.content?.products
+    ? rawProducts.map((p) => ({ ...p, rating: '' }))
+    : rawProducts;
 
   const handleAdd = (id: string, name: string) => {
     setCartItems((prev) => ({ ...prev, [id]: true }));
@@ -219,10 +223,12 @@ export function ProductGridCardRow(props: StudioComponentProps<ProductGridConten
                     <span style={{ fontSize: '12px', color: 'var(--studio-muted)' }}>
                       {p.collection}
                     </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--studio-accent)' }}>
-                      <Star size={11} fill="currentColor" />
-                      <span>{p.rating}</span>
-                    </div>
+                    {p.rating ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: 'var(--studio-accent)' }}>
+                        <Star size={11} fill="currentColor" />
+                        <span>{p.rating}</span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <h3

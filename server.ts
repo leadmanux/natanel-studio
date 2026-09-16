@@ -9,6 +9,7 @@ import { GeminiComponentSelector } from './server/services/componentSelector';
 import { GeminiAssetPlanner } from './server/services/assetPlanner';
 import { GeminiDesignCritic } from './server/services/designCritic';
 import { demoComponents } from './shared/componentRegistry';
+import { canonicalComponentStore } from './server/services/canonicalComponentStore';
 
 async function startServer() {
   const app = express();
@@ -77,15 +78,70 @@ async function startServer() {
     }
   });
 
+  // Canonical Component Registry Endpoints
+  app.get('/api/components', (_req, res) => {
+    try {
+      const components = canonicalComponentStore.getAllComponents();
+      return res.json({ components });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to retrieve components.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  app.patch('/api/components/:id/status', (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status || !['approved', 'candidate', 'rejected'].includes(status)) {
+        return res.status(400).json({ error: 'Valid status ("approved" | "candidate" | "rejected") is required.' });
+      }
+      const updated = canonicalComponentStore.updateComponentStatus(id, status);
+      if (!updated) {
+        return res.status(404).json({ error: `Component with ID "${id}" not found.` });
+      }
+      return res.json({ component: updated });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update component status.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/components/candidate', (req, res) => {
+    try {
+      const candidate = req.body;
+      if (!candidate || !candidate.id || !candidate.name) {
+        return res.status(400).json({ error: 'Candidate component specification with id and name is required.' });
+      }
+      const saved = canonicalComponentStore.registerCandidate(candidate);
+      return res.json({ component: saved });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to register candidate.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
   // Component Selection Engine
   app.post('/api/ai/select-components', async (req, res) => {
     try {
-      const { project, candidates = demoComponents } = req.body;
+      const { project, candidates } = req.body;
       if (!project) {
         return res.status(400).json({ error: 'Project payload is required.' });
       }
+
+      // Always check canonical server store: candidates marked 'candidate' or 'rejected' are strictly ineligible
+      const canonicalAll = canonicalComponentStore.getAllComponents();
+      const statusMap = new Map<string, string>(canonicalAll.map((c) => [c.id, c.status]));
+
+      const candidatePool = (candidates && Array.isArray(candidates) ? candidates : canonicalAll).map((c: any) => ({
+        ...c,
+        status: statusMap.get(c.id) || c.status,
+      }));
+
+      const eligibleApprovedOnly = candidatePool.filter((c: any) => c.status === 'approved');
+
       const selector = new GeminiComponentSelector();
-      const selections = await selector.selectDetailed(project, candidates);
+      const selections = await selector.selectDetailed(project, eligibleApprovedOnly);
       return res.json({ selections });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to select components.';

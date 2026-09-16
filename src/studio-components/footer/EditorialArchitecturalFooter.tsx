@@ -16,7 +16,7 @@ export interface ArchitecturalFooterContent {
 export function EditorialArchitecturalFooter(props: StudioComponentProps<ArchitecturalFooterContent>) {
   const isRtl = props.direction === 'rtl';
 
-  const defaultContent = isRtl
+  const defaultContent: ArchitecturalFooterContent = isRtl
     ? {
         brandName: 'NATANEL STUDIO',
         tagline: 'משרד לתכנון אדריכלי, מגורי יוקרה ועיצוב חלל מוקפד.',
@@ -36,7 +36,11 @@ export function EditorialArchitecturalFooter(props: StudioComponentProps<Archite
         copyright: '© MMXXVI Natanel Studio. Built to sovereign architectural standards.',
       };
 
-  const content = { ...defaultContent, ...props.content };
+  const isProduction = props.contentMode === 'production';
+  const content: ArchitecturalFooterContent = { ...defaultContent, ...props.content };
+  if (isProduction && !props.content?.license) {
+    content.license = undefined;
+  }
 
   return (
     <StudioComponentWrapper {...props}>

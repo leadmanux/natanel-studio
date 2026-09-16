@@ -51,6 +51,7 @@ export interface StudioAssetSlot {
 
 export interface StudioComponentProps<TContent = Record<string, any>> {
   content?: TContent;
+  contentMode?: 'preview' | 'production';
   assets?: Record<string, StudioAssetSlot>;
   designTokens?: StudioDesignTokens;
   direction?: 'ltr' | 'rtl';
