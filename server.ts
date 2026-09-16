@@ -3,6 +3,12 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { z } from 'zod';
 import { GeminiImageGenerator } from './server/services/imageGenerator';
+import { GeminiArtDirector } from './server/services/artDirector';
+import { GeminiReferenceAnalyzer } from './server/services/referenceAnalyzer';
+import { GeminiComponentSelector } from './server/services/componentSelector';
+import { GeminiAssetPlanner } from './server/services/assetPlanner';
+import { GeminiDesignCritic } from './server/services/designCritic';
+import { demoComponents } from './shared/componentRegistry';
 
 async function startServer() {
   const app = express();
@@ -16,7 +22,7 @@ async function startServer() {
   });
 
   const imageRequestSchema = z.object({
-    prompt: z.string().min(10),
+    prompt: z.string().min(5),
     negativePrompt: z.string().optional(),
     aspectRatio: z.enum(['1:1', '4:5', '3:4', '9:16', '16:9', '21:9', '4:1', '8:1']),
     resolution: z.enum(['0.5K', '1K', '2K', '4K']).default('1K'),
@@ -35,6 +41,86 @@ async function startServer() {
       return res.json(image);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown image generation error.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  // Art Director: Generates 3 distinct design concepts
+  app.post('/api/ai/art-directions', async (req, res) => {
+    try {
+      const { project } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const artDirector = new GeminiArtDirector();
+      const directions = await artDirector.proposeDirections(project);
+      return res.json({ directions });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to generate design directions.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  // Reference Website Analysis
+  app.post('/api/ai/analyze-reference', async (req, res) => {
+    try {
+      const { url, project } = req.body;
+      if (!url) {
+        return res.status(400).json({ error: 'Reference URL is required.' });
+      }
+      const analyzer = new GeminiReferenceAnalyzer();
+      const analysis = await analyzer.analyze(url, project);
+      return res.json({ analysis });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to analyze reference URL.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  // Component Selection Engine
+  app.post('/api/ai/select-components', async (req, res) => {
+    try {
+      const { project, candidates = demoComponents } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const selector = new GeminiComponentSelector();
+      const selections = await selector.selectDetailed(project, candidates);
+      return res.json({ selections });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to select components.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  // Asset Planner: Website Asset Manifest
+  app.post('/api/ai/plan-assets', async (req, res) => {
+    try {
+      const { project } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const planner = new GeminiAssetPlanner();
+      const assets = await planner.plan(project);
+      return res.json({ assets });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to plan assets.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  // Design Critic: Design Quality Review
+  app.post('/api/ai/critic', async (req, res) => {
+    try {
+      const { project, screenshots } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const critic = new GeminiDesignCritic();
+      const report = await critic.review(project, screenshots);
+      return res.json({ report });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to critique design.';
       return res.status(500).json({ error: message });
     }
   });

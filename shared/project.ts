@@ -34,6 +34,24 @@ export interface BusinessProfile {
   socialLinks: SocialLink[];
 }
 
+export interface ReferenceAnalysis {
+  id: string;
+  url: string;
+  analyzedAt: string;
+  summary: string;
+  layout: string;
+  typography: string;
+  whitespace: string;
+  navigation: string;
+  heroComposition: string;
+  imageTreatment: string;
+  sectionTransitions: string;
+  interactionPatterns: string;
+  motion: string;
+  conversionTechniques: string;
+  extractedDesignPrinciples: string[];
+}
+
 export interface BrandProfile {
   logoAssets: string[];
   colors: string[];
@@ -41,6 +59,10 @@ export interface BrandProfile {
   brandNotes: string;
   uploadedAssets: string[];
   referenceSites: string[];
+  referenceAnalyses?: ReferenceAnalysis[];
+  visualPreferences?: string[];
+  contentDensity?: 'spacious' | 'balanced' | 'compact' | 'editorial';
+  ecommerceMode?: 'ecommerce' | 'lead_generation';
 }
 
 export interface Strategy {
@@ -55,14 +77,28 @@ export interface Strategy {
 
 export interface DesignSystem {
   artDirection: string;
+  creativeConcept?: string;
+  visualMood?: string;
   typography: string;
+  typographyDirection?: string;
   colors: string[];
+  colorDirection?: string;
   spacing: string;
+  spacingPhilosophy?: string;
   borderRadius: string;
   imageStyle: string;
+  photographyDirection?: string;
+  imageGenerationStrategy?: string;
   motionStyle: string;
+  motionPhilosophy?: string;
+  layoutPhilosophy?: string;
   layoutRules: string[];
   avoidRules: string[];
+  CROApproach?: string;
+  recommendedComponentStyles?: string[];
+  density?: 'spacious' | 'balanced' | 'compact' | 'editorial';
+  visualPersonality?: string;
+  approvedAt?: string;
 }
 
 export interface SiteSection {
@@ -73,6 +109,10 @@ export interface SiteSection {
   content: Record<string, unknown>;
   assetIds: string[];
   order: number;
+  reason?: string;
+  contentRequirements?: string[];
+  imageRequirements?: string[];
+  motionPreset?: string;
 }
 
 export interface SitePage {
@@ -98,6 +138,7 @@ export interface GeneratedAsset {
   status: 'planned' | 'generating' | 'generated' | 'approved' | 'rejected' | 'failed';
   outputUrl?: string;
   createdAt?: string;
+  visualConsistencyInstructions?: string;
 }
 
 export interface ExportConfig {
