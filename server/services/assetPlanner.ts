@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { GeneratedAsset, Project } from '../../shared/project';
 import type { AssetPlannerService } from '../../src/ai/contracts';
 import { modelConfig } from '../config/models';
+import { getFallbackAssets } from '../../shared/industryTaxonomy';
 
 export class GeminiAssetPlanner implements AssetPlannerService {
   private ai: GoogleGenAI | null = null;
@@ -25,11 +26,11 @@ export class GeminiAssetPlanner implements AssetPlannerService {
           return assets;
         }
       } catch (err) {
-        console.warn('[AssetPlanner] Gemini call failed, using calibrated studio asset generator:', err);
+        console.warn('[AssetPlanner] Gemini call failed, using calibrated industry asset generator:', err);
       }
     }
 
-    return this.planDeterministicAssets(project);
+    return getFallbackAssets(project);
   }
 
   private async planWithGemini(project: Project): Promise<GeneratedAsset[]> {
@@ -107,100 +108,10 @@ Return structured JSON array of assets.`;
       referenceAssets: [],
       model: 'gemini-3.1-flash-image',
       status: 'planned' as const,
+      source: 'ai' as const,
       createdAt: new Date().toISOString(),
       visualConsistencyInstructions: item.visualConsistencyInstructions,
     }));
-  }
-
-  private planDeterministicAssets(project: Project): GeneratedAsset[] {
-    const businessName = project.business.businessName || 'The Atelier';
-    const industry = project.business.industry || 'Architecture & Interior Design';
-    const primaryColor = project.designSystem.colors?.[0] || '#0d0d0f';
-    const paletteNotes = project.designSystem.colors?.join(', ') || 'Obsidian, bone white, raw travertine stone';
-    const visualConsistency = `Match overall art direction: ${project.designSystem.artDirection || 'Architectural Monolith'}. Restrained warm-cool balance, directional 35mm natural side lighting, filmic subtle grain, zero oversaturation, palette harmony with ${paletteNotes}.`;
-
-    return [
-      {
-        id: 'hero-main-banner',
-        type: 'image',
-        purpose: 'Primary Homepage Panoramic Cinema Hero',
-        pageId: 'Home',
-        sectionId: 'hero-section',
-        prompt: `Architectural cinematic photograph representing ${industry} for ${businessName}. Ultra-wide 21:9 composition, exquisite minimalist spatial composition with cast shadows, tactile stone and dark walnut wood textures, natural soft diffuse morning daylight entering from the right, Hasselblad medium format camera clarity, 45mm lens, f/5.6, hyper-realistic materiality, editorial museum-grade aesthetic.`,
-        negativePrompt: 'blurry, cartoon, 3d render, oversaturated, neon, generic corporate stock photo, artificial studio flash, distorted perspective',
-        aspectRatio: '21:9',
-        resolution: '4K',
-        referenceAssets: [],
-        model: 'gemini-3.1-flash-image',
-        status: 'planned',
-        createdAt: new Date().toISOString(),
-        visualConsistencyInstructions: visualConsistency,
-      },
-      {
-        id: 'project-panorama-1',
-        type: 'image',
-        purpose: 'Portfolio Flagship Panorama Banner',
-        pageId: 'Home',
-        sectionId: 'portfolio-showcase',
-        prompt: `Bespoke ultra-wide 4:1 panorama showcase for ${industry}. Continuous linear architectural elevation, pristine natural materials, subtle cast shadows, clean horizontal symmetry, authentic material junctions with brushed dark bronze and pale travertine, shot on Leica S3, editorial architectural monograph standard.`,
-        negativePrompt: 'cgi, cartoon, plastic, distorted lines, low resolution, watermark, text, saturated colors',
-        aspectRatio: '4:1',
-        resolution: '4K',
-        referenceAssets: [],
-        model: 'gemini-3.1-flash-image',
-        status: 'planned',
-        createdAt: new Date().toISOString(),
-        visualConsistencyInstructions: visualConsistency,
-      },
-      {
-        id: 'project-detail-vignette-1',
-        type: 'image',
-        purpose: 'Craftsmanship Detail Vignette',
-        pageId: 'Home',
-        sectionId: 'portfolio-showcase',
-        prompt: `Intimate close-up detail vignette of craftsmanship in ${industry}. 16:9 ratio, shallow depth of field, focused on authentic raw textures, micro-bevels, tactile joinery, delicate ambient rim lighting, shot with 85mm prime lens f/2.8, restrained and tactile.`,
-        negativePrompt: 'blurry, harsh flash, plastic texture, fake 3d, blown out highlights',
-        aspectRatio: '16:9',
-        resolution: '2K',
-        referenceAssets: [],
-        model: 'gemini-3.1-flash-image',
-        status: 'planned',
-        createdAt: new Date().toISOString(),
-        visualConsistencyInstructions: visualConsistency,
-      },
-      {
-        id: 'customer-portrait-1',
-        type: 'image',
-        purpose: 'Executive Client Testimonial Portrait',
-        pageId: 'Home',
-        sectionId: 'testimonials-section',
-        prompt: `Authentic editorial portrait of an executive client, 4:5 vertical framing. Natural window light in a modern architect-designed office, thoughtful composed expression, genuine human demeanor, neutral tailored dark linen attire, soft out-of-focus architectural background with warm ambient depth, shot on Contax 645, 80mm lens f/2, non-corporate, editorial portrait style.`,
-        negativePrompt: 'fake smiling model, generic stock photo, corporate thumbs up, heavy airbrush, distorted teeth, plastic skin',
-        aspectRatio: '4:5',
-        resolution: '2K',
-        referenceAssets: [],
-        model: 'gemini-3.1-flash-image',
-        status: 'planned',
-        createdAt: new Date().toISOString(),
-        visualConsistencyInstructions: visualConsistency,
-      },
-      {
-        id: 'product-macro-craft-1',
-        type: 'image',
-        purpose: 'Tactile Material & Offer Foundation',
-        pageId: 'Home',
-        sectionId: 'services-section',
-        prompt: `Studio still life highlighting premium physical materials for ${businessName}. 1:1 square composition, dark slate background, warm directional spotlight casting soft linear shadow, honest physical tactile materials, minimal composition, Japanese wabi-sabi precision.`,
-        negativePrompt: 'busy background, neon colors, text, artificial glow, cheap plastic, 3d render',
-        aspectRatio: '1:1',
-        resolution: '2K',
-        referenceAssets: [],
-        model: 'gemini-3.1-flash-image',
-        status: 'planned',
-        createdAt: new Date().toISOString(),
-        visualConsistencyInstructions: visualConsistency,
-      },
-    ];
   }
 }
 

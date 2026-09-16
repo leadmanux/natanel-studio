@@ -5,6 +5,7 @@ export interface ArtDirectionProposal {
   id: string;
   name: string; // artDirectionName
   artDirectionName?: string;
+  source?: 'ai' | 'deterministic_fallback';
   creativeConcept: string;
   visualMood: string;
   rationale: string;
@@ -54,7 +55,11 @@ export interface AssetPlannerService {
 }
 
 export interface ReferenceAnalyzerService {
-  analyze(url: string, projectContext?: Partial<Project>): Promise<ReferenceAnalysis>;
+  analyze(
+    url: string,
+    projectContext?: Partial<Project>,
+    screenshots?: { desktop?: string; mobile?: string } | string[]
+  ): Promise<ReferenceAnalysis>;
 }
 
 export interface ImageGeneratorRequest {
@@ -96,8 +101,10 @@ export interface CategoryCritique {
     | 'mobile experience'
     | 'RTL quality'
     | 'AI-generated website feeling';
-  status: 'passed' | 'warning' | 'alert';
+  status: 'passed' | 'warning' | 'alert' | 'not_evaluated';
   score: number; // 0 - 100
+  evidenceLevel?: 'visually_verified' | 'architecture_inference' | 'insufficient_evidence';
+  visualObservations?: string[];
   findings: string[];
   actionableCorrections: string[];
 }
@@ -107,9 +114,18 @@ export interface DesignCriticReport {
   categories: CategoryCritique[];
   findings: DesignCriticFinding[];
   evaluatedAt: string;
+  source?: 'ai' | 'deterministic_fallback';
+  inspectedScreenshots?: {
+    desktop: boolean;
+    mobile: boolean;
+    count?: number;
+  };
 }
 
 export interface DesignCriticService {
-  review(project: Project, screenshots?: string[]): Promise<DesignCriticReport>;
+  review(
+    project: Project,
+    screenshots?: string[] | { desktop?: string; mobile?: string }
+  ): Promise<DesignCriticReport>;
 }
 

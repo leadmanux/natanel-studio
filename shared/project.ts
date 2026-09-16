@@ -34,10 +34,22 @@ export interface BusinessProfile {
   socialLinks: SocialLink[];
 }
 
+export type RetrievalStatus = 'success' | 'failed' | 'limited';
+
 export interface ReferenceAnalysis {
   id: string;
   url: string;
   analyzedAt: string;
+  retrievalStatus?: RetrievalStatus;
+  retrievedUrl?: string;
+  retrievalNotes?: string;
+  source?: 'ai' | 'deterministic_fallback';
+  screenshots?:
+    | {
+        desktop?: string;
+        mobile?: string;
+      }
+    | string[];
   summary: string;
   layout: string;
   typography: string;
@@ -135,6 +147,7 @@ export interface GeneratedAsset {
   resolution: '0.5K' | '1K' | '2K' | '4K';
   referenceAssets: string[];
   model: string;
+  source?: 'ai' | 'deterministic_fallback';
   status: 'planned' | 'generating' | 'generated' | 'approved' | 'rejected' | 'failed';
   outputUrl?: string;
   createdAt?: string;

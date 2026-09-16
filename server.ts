@@ -64,12 +64,12 @@ async function startServer() {
   // Reference Website Analysis
   app.post('/api/ai/analyze-reference', async (req, res) => {
     try {
-      const { url, project } = req.body;
+      const { url, project, screenshots } = req.body;
       if (!url) {
         return res.status(400).json({ error: 'Reference URL is required.' });
       }
       const analyzer = new GeminiReferenceAnalyzer();
-      const analysis = await analyzer.analyze(url, project);
+      const analysis = await analyzer.analyze(url, project, screenshots);
       return res.json({ analysis });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to analyze reference URL.';

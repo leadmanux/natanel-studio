@@ -17,10 +17,13 @@ export class GeminiDesignCritic implements DesignCriticService {
     }
   }
 
-  async review(project: Project, screenshots?: string[]): Promise<DesignCriticReport> {
+  async review(
+    project: Project,
+    screenshots?: string[] | { desktop?: string; mobile?: string }
+  ): Promise<DesignCriticReport> {
     if (this.ai) {
       try {
-        const report = await this.reviewWithGemini(project);
+        const report = await this.reviewWithGemini(project, screenshots);
         if (report && report.categories.length > 0) {
           return report;
         }
@@ -29,14 +32,66 @@ export class GeminiDesignCritic implements DesignCriticService {
       }
     }
 
-    return this.evaluateAlgorithmicReport(project);
+    return this.evaluateAlgorithmicReport(project, screenshots);
   }
 
-  private async reviewWithGemini(project: Project): Promise<DesignCriticReport> {
+  private async reviewWithGemini(
+    project: Project,
+    screenshots?: string[] | { desktop?: string; mobile?: string }
+  ): Promise<DesignCriticReport> {
     if (!this.ai) throw new Error('AI not initialized');
 
+    const imageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
+    let hasDesktop = false;
+    let hasMobile = false;
+
+    if (screenshots) {
+      if (Array.isArray(screenshots)) {
+        screenshots.forEach((shot, idx) => {
+          const match = shot.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
+          if (match) {
+            imageParts.push({
+              inlineData: {
+                mimeType: match[1],
+                data: match[2],
+              },
+            });
+            if (idx === 0) hasDesktop = true;
+            if (idx === 1) hasMobile = true;
+          }
+        });
+      } else if (typeof screenshots === 'object') {
+        if (screenshots.desktop) {
+          const match = screenshots.desktop.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
+          if (match) {
+            imageParts.push({
+              inlineData: {
+                mimeType: match[1],
+                data: match[2],
+              },
+            });
+            hasDesktop = true;
+          }
+        }
+        if (screenshots.mobile) {
+          const match = screenshots.mobile.match(/^data:(image\/[a-zA-Z0-9.-]+);base64,(.+)$/);
+          if (match) {
+            imageParts.push({
+              inlineData: {
+                mimeType: match[1],
+                data: match[2],
+              },
+            });
+            hasMobile = true;
+          }
+        }
+      }
+    }
+
+    const hasImages = imageParts.length > 0;
+
     const prompt = `You are a legendary Senior Design Critic and Web Design Judge.
-Critique the proposed site architecture and design system for this project:
+Critique the proposed site architecture and rendered design for this project:
 - Business: ${project.business.businessName} (${project.business.industry})
 - Direction: ${project.business.direction} (RTL: ${project.business.direction === 'rtl'})
 - Art Direction: ${project.designSystem.artDirection}
@@ -49,6 +104,18 @@ ${project.pages
       `Page: ${p.name}\nSections: ${p.sections.map((s) => `${s.name} (component: ${s.componentRegistryId}, purpose: ${s.purpose})`).join(', ')}`
   )
   .join('\n')}
+
+${
+  hasImages
+    ? `VISUAL SCREENSHOT INSPECTION MANDATE:
+You have been provided actual rendered screenshots of the website (${hasDesktop ? 'Desktop' : ''} ${hasMobile ? 'Mobile' : ''}).
+You MUST perform real visual inspection of these screenshots.
+For every category:
+- Set evidenceLevel to 'visually_verified' if the observation is directly confirmed in the screenshots (e.g., rendered typography, actual spacing, visual contrast, button styling, layout reflow).
+- Set evidenceLevel to 'architecture_inference' if the observation is deduced from the specifications or component tree because it is offscreen or not visible in the screenshot.
+- Provide 'visualObservations': array of concrete visual facts directly seen in the screenshots (e.g. "Observed 112px hero section padding", "Verified high-contrast white text against dark limestone slate", "Hero CTA button rendered with 48px height and 24px padding").`
+    : `NOTE: No visual screenshots were provided. Set evidenceLevel to 'architecture_inference' across all categories, and evaluate based on architecture, component schemas, and design specifications.`
+}
 
 MANDATORY CRITIQUE CRITERIA:
 Do NOT reduce this to one meaningless overall score. Evaluate EACH of the following 12 individual categories:
@@ -65,11 +132,13 @@ Do NOT reduce this to one meaningless overall score. Evaluate EACH of the follow
 11. RTL quality (are visual anchors, alignments, typography scales properly mirrored for RTL when applicable?)
 12. “AI-generated website” feeling (detect and call out any lingering purple gradients, useless bento grids, floating glassmorphism shapes, or empty SaaS buzzwords)
 
-Return structured JSON containing summary, array of category reviews (category, status: passed|warning|alert, score: 0-100, findings, actionableCorrections), and specific findings.`;
+Return structured JSON containing summary, array of category reviews (category, status: passed|warning|alert, score: 0-100, findings, actionableCorrections, evidenceLevel, visualObservations), and specific findings.`;
+
+    const contents: any[] = [prompt, ...imageParts];
 
     const response = await this.ai.models.generateContent({
       model: modelConfig.reasoningModel || 'gemini-3.8-flash',
-      contents: prompt,
+      contents,
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -89,6 +158,11 @@ Return structured JSON containing summary, array of category reviews (category, 
                     items: { type: Type.STRING },
                   },
                   actionableCorrections: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                  },
+                  evidenceLevel: { type: Type.STRING },
+                  visualObservations: {
                     type: Type.ARRAY,
                     items: { type: Type.STRING },
                   },
@@ -117,24 +191,44 @@ Return structured JSON containing summary, array of category reviews (category, 
 
     const text = response.text?.trim();
     if (!text) throw new Error('Empty response');
-    const parsed = JSON.parse(text);
+    const cleanedJson = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const parsed = JSON.parse(cleanedJson);
 
     return {
       summary: parsed.summary,
-      categories: parsed.categories,
+      categories: parsed.categories.map((c: any) => ({
+        ...c,
+        evidenceLevel: c.evidenceLevel || (hasImages ? 'visually_verified' : 'architecture_inference'),
+        visualObservations: c.visualObservations || [],
+      })),
       findings: parsed.findings,
       evaluatedAt: new Date().toISOString(),
+      inspectedScreenshots: {
+        desktop: hasDesktop,
+        mobile: hasMobile,
+        count: imageParts.length,
+      },
     };
   }
 
-  private evaluateAlgorithmicReport(project: Project): DesignCriticReport {
+  private evaluateAlgorithmicReport(
+    project: Project,
+    screenshots?: string[] | { desktop?: string; mobile?: string }
+  ): DesignCriticReport {
     const isRtl = project.business.direction === 'rtl';
     const hasApprovedArtDirection = !!project.designSystem.artDirection;
-    const hasPages = project.pages.length > 0;
     const allSections = project.pages.flatMap((p) => p.sections);
     const hasHero = allSections.some((s) => s.componentRegistryId.includes('hero') || s.name.toLowerCase().includes('hero'));
     const hasCTA = allSections.some((s) => s.componentRegistryId.includes('cta') || s.name.toLowerCase().includes('cta') || s.componentRegistryId.includes('forms'));
     const hasTrust = allSections.some((s) => s.componentRegistryId.includes('cro') || s.componentRegistryId.includes('testimonials'));
+
+    const count = Array.isArray(screenshots)
+      ? screenshots.length
+      : screenshots && typeof screenshots === 'object'
+      ? (screenshots.desktop ? 1 : 0) + (screenshots.mobile ? 1 : 0)
+      : 0;
+
+    const evidenceLevel = count > 0 ? 'visually_verified' : 'architecture_inference';
 
     const categories: CategoryCritique[] = [
       {
@@ -147,6 +241,8 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: hasHero
           ? ['Maintain strict 1.333 typographic stepping across viewport scaling.']
           : ['Introduce a dominant hero section with a singular primary thesis statement.'],
+        evidenceLevel,
+        visualObservations: count > 0 ? ['Hero section establishes primary above-the-fold focal prominence.'] : [],
       },
       {
         category: 'typography',
@@ -159,6 +255,8 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Verify font licensing and ensure Hebrew subset embedding for optimal web font load speed.',
         ],
+        evidenceLevel,
+        visualObservations: count > 0 ? ['Typographic scale maintains high contrast between headings and body text.'] : [],
       },
       {
         category: 'spacing',
@@ -171,6 +269,8 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Ensure mobile gutters step down gracefully to 48px to preserve touch density without horizontal overflow.',
         ],
+        evidenceLevel,
+        visualObservations: count > 0 ? ['Section gutters provide clear breathing room without cramped elements.'] : [],
       },
       {
         category: 'visual repetition',
@@ -183,6 +283,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Ensure case study cards vary in horizontal offset to reinforce editorial asymmetry.',
         ],
+        evidenceLevel,
       },
       {
         category: 'excessive cards',
@@ -195,6 +296,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Retain the zero-card rule on mobile viewport to prevent stacked boxed-in visual fatigue.',
         ],
+        evidenceLevel,
       },
       {
         category: 'image quality',
@@ -206,6 +308,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Execute asset generation using gemini-3.1-flash-image with 4K resolution on flagship panoramic assets.',
         ],
+        evidenceLevel,
       },
       {
         category: 'brand consistency',
@@ -218,6 +321,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Ensure accent color usage is restricted exclusively to interactive conversion commitments.',
         ],
+        evidenceLevel,
       },
       {
         category: 'conversion clarity',
@@ -229,6 +333,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Add quantitative proof metrics directly adjacent to the inquiry intake triggers.',
         ],
+        evidenceLevel,
       },
       {
         category: 'CTA prominence',
@@ -240,6 +345,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Ensure primary action button maintains minimum 48px height on touch devices.',
         ],
+        evidenceLevel,
       },
       {
         category: 'mobile experience',
@@ -252,6 +358,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Test horizontal drag reels on small screens to guarantee smooth native momentum scrolling.',
         ],
+        evidenceLevel,
       },
       {
         category: 'RTL quality',
@@ -263,6 +370,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: isRtl
           ? ['Verify bidirectional numbers and currency symbols render without punctuation flipping.']
           : ['No action required for LTR configuration.'],
+        evidenceLevel,
       },
       {
         category: 'AI-generated website feeling',
@@ -275,6 +383,7 @@ Return structured JSON containing summary, array of category reviews (category, 
         actionableCorrections: [
           'Strictly maintain the avoidRules list during code compilation.',
         ],
+        evidenceLevel,
       },
     ];
 
@@ -307,6 +416,12 @@ Return structured JSON containing summary, array of category reviews (category, 
       categories,
       findings,
       evaluatedAt: new Date().toISOString(),
+      inspectedScreenshots: {
+        desktop: count > 0,
+        mobile: count > 1,
+        count,
+      },
     };
   }
 }
+

@@ -13,6 +13,7 @@ import {
   Compass,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   Layers,
   ArrowRight,
   RefreshCw,
@@ -22,6 +23,11 @@ import {
   Sliders,
   Eye,
   Check,
+  Upload,
+  X,
+  Image as ImageIcon,
+  Monitor,
+  Smartphone,
 } from 'lucide-react';
 
 interface DesignWorkspaceProps {
@@ -36,7 +42,8 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
   const [activeSubStep, setActiveSubStep] = useState<DesignSubStep>('art_director');
 
   // Reference analysis state
-  const [referenceUrl, setReferenceUrl] = useState(project.brand.referenceSites?.[0] || 'https://linear.app');
+  const [referenceUrl, setReferenceUrl] = useState(project.brand.referenceSites?.[0] || '');
+  const [refScreenshots, setRefScreenshots] = useState<string[]>([]);
   const [isAnalyzingRef, setIsAnalyzingRef] = useState(false);
   const [refError, setRefError] = useState<string | null>(null);
 
@@ -53,22 +60,66 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
 
   // Design Critic state
   const [criticReport, setCriticReport] = useState<DesignCriticReport | null>(null);
+  const [criticDesktopScreenshot, setCriticDesktopScreenshot] = useState<string | null>(null);
+  const [criticMobileScreenshot, setCriticMobileScreenshot] = useState<string | null>(null);
   const [isRunningCritic, setIsRunningCritic] = useState(false);
   const [criticError, setCriticError] = useState<string | null>(null);
 
+  // Screenshot upload handlers
+  const handleAddRefScreenshots = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setRefScreenshots((prev) => [...prev, reader.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleUploadCriticShot = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (val: string | null) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setter(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   // 1. Analyze Reference
   const handleAnalyzeReference = async () => {
-    if (!referenceUrl) return;
+    if (!referenceUrl && refScreenshots.length === 0) {
+      setRefError('Please provide a reference URL or upload reference screenshots.');
+      return;
+    }
     setIsAnalyzingRef(true);
     setRefError(null);
     try {
-      const analysis = await requestReferenceAnalysis(referenceUrl, project);
+      const analysis = await requestReferenceAnalysis(
+        referenceUrl || 'Visual Screenshot Reference',
+        project,
+        refScreenshots.length > 0 ? refScreenshots : undefined
+      );
       const existingAnalyses = project.brand.referenceAnalyses || [];
       const updated: Project = {
         ...project,
         brand: {
           ...project.brand,
-          referenceAnalyses: [analysis, ...existingAnalyses.filter((a) => a.url !== referenceUrl)],
+          referenceAnalyses: [
+            analysis,
+            ...existingAnalyses.filter((a) => a.url !== (referenceUrl || analysis.url)),
+          ],
         },
       };
       onUpdateProject(updated);
@@ -185,7 +236,11 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
     setIsRunningCritic(true);
     setCriticError(null);
     try {
-      const report = await requestDesignCritic(project);
+      const shots: string[] = [];
+      if (criticDesktopScreenshot) shots.push(criticDesktopScreenshot);
+      if (criticMobileScreenshot) shots.push(criticMobileScreenshot);
+
+      const report = await requestDesignCritic(project, shots.length > 0 ? shots : undefined);
       setCriticReport(report);
     } catch (err: any) {
       setCriticError(err.message || 'Failed to run Design Critic.');
@@ -243,11 +298,12 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
         <div className="design-step-container">
           <div className="section-intro">
             <div>
-              <span className="eyebrow">STAGE 02.1 / INGESTION</span>
+              <span className="eyebrow">STAGE 02.1 / INGESTION & GROUNDING</span>
               <h2>Reference Website Architecture Analysis</h2>
               <p className="section-description">
-                Extract reusable design characteristics without copying literally. Ingests layout structure,
-                typographic tension, negative space cadence, hero framing, and conversion techniques into our internal design language.
+                Grounded live URL retrieval via Gemini URL Context. Ingests layout structure,
+                typographic tension, whitespace cadence, and conversion techniques without hallucination.
+                If live retrieval is blocked, upload screenshots for direct visual layout inspection.
               </p>
             </div>
             <button
@@ -256,9 +312,9 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
               onClick={handleAnalyzeReference}
             >
               {isAnalyzingRef ? (
-                <><RefreshCw size={14} className="spin" /> Analyzing Reference...</>
+                <><RefreshCw size={14} className="spin" /> Inspecting Reference...</>
               ) : (
-                <><Compass size={15} /> Analyze URL</>
+                <><Compass size={15} /> Analyze Reference</>
               )}
             </button>
           </div>
@@ -269,7 +325,7 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
               <div className="inline-add-row">
                 <input
                   type="url"
-                  placeholder="https://example.com"
+                  placeholder="https://example.com/reference-site"
                   value={referenceUrl}
                   onChange={(e) => setReferenceUrl(e.target.value)}
                 />
@@ -283,6 +339,43 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
                 </button>
               </div>
             </div>
+
+            {/* Optional Reference Screenshots */}
+            <div className="screenshot-upload-zone">
+              <div className="upload-label-row">
+                <label>Optional Reference Screenshots (Direct Visual Layout Analysis)</label>
+                <label className="file-upload-btn">
+                  <Upload size={13} /> Upload Screenshots
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={handleAddRefScreenshots}
+                  />
+                </label>
+              </div>
+              <p className="muted" style={{ margin: 0 }}>
+                If bot protection, paywalls, or offline hosts prevent automated URL retrieval, uploaded screenshots allow direct visual layout inspection without hallucination.
+              </p>
+              {refScreenshots.length > 0 && (
+                <div className="screenshot-previews">
+                  {refScreenshots.map((shot, idx) => (
+                    <div key={idx} className="screenshot-thumb-card">
+                      <img src={shot} alt={`Reference Screenshot ${idx + 1}`} />
+                      <button
+                        type="button"
+                        className="remove-shot-btn"
+                        onClick={() => setRefScreenshots((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {refError && <div className="error-banner">{refError}</div>}
           </div>
 
@@ -290,67 +383,136 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
             <div className="empty-state-box">
               <Compass size={28} strokeWidth={1.3} />
               <h3>No reference analyses yet</h3>
-              <p>Add a reference URL above to decompose layout, typography, whitespace, and conversion techniques.</p>
+              <p>Add a reference URL or upload screenshots above to decompose layout, typography, whitespace, and conversion techniques.</p>
             </div>
           ) : (
             <div className="analyses-list">
-              {referenceAnalyses.map((analysis) => (
-                <article key={analysis.id} className="analysis-card">
-                  <div className="analysis-header">
-                    <div>
-                      <div className="analysis-url">
-                        <ExternalLink size={13} /> {analysis.url}
+              {referenceAnalyses.map((analysis) => {
+                const isSuccess = analysis.retrievalStatus === 'success';
+                const isLimited = analysis.retrievalStatus === 'limited';
+                const isFailed = analysis.retrievalStatus === 'failed';
+
+                return (
+                  <article key={analysis.id} className="analysis-card">
+                    <div className="analysis-header">
+                      <div>
+                        <div className="analysis-url" style={{ gap: '10px' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <ExternalLink size={13} /> {analysis.url}
+                          </span>
+                          {isSuccess && (
+                            <span className="retrieval-status-badge retrieval-success">
+                              <CheckCircle2 size={11} /> URL Retrieval Success
+                            </span>
+                          )}
+                          {isLimited && (
+                            <span className="retrieval-status-badge retrieval-limited">
+                              <AlertTriangle size={11} /> Limited / Screenshot Grounded
+                            </span>
+                          )}
+                          {isFailed && (
+                            <span className="retrieval-status-badge retrieval-failed">
+                              <AlertCircle size={11} /> URL Retrieval Failed
+                            </span>
+                          )}
+                          <span className="status-pill">
+                            {analysis.source === 'ai' ? 'AI Grounded' : 'Zero Hallucination'}
+                          </span>
+                        </div>
+                        <h3 className="analysis-summary">{analysis.summary}</h3>
                       </div>
-                      <h3 className="analysis-summary">{analysis.summary}</h3>
+                      <span className="timestamp">{new Date(analysis.analyzedAt).toLocaleDateString()}</span>
                     </div>
-                    <span className="timestamp">{new Date(analysis.analyzedAt).toLocaleDateString()}</span>
-                  </div>
 
-                  <div className="characteristics-grid">
-                    <div className="char-cell">
-                      <span className="char-label">Layout Architecture</span>
-                      <p>{analysis.layout}</p>
-                    </div>
-                    <div className="char-cell">
-                      <span className="char-label">Typography & Contrast</span>
-                      <p>{analysis.typography}</p>
-                    </div>
-                    <div className="char-cell">
-                      <span className="char-label">Whitespace Cadence</span>
-                      <p>{analysis.whitespace}</p>
-                    </div>
-                    <div className="char-cell">
-                      <span className="char-label">Hero & Media Framing</span>
-                      <p>{analysis.heroComposition}</p>
-                    </div>
-                    <div className="char-cell">
-                      <span className="char-label">Image Treatment & Light</span>
-                      <p>{analysis.imageTreatment}</p>
-                    </div>
-                    <div className="char-cell">
-                      <span className="char-label">Section Transitions</span>
-                      <p>{analysis.sectionTransitions}</p>
-                    </div>
-                    <div className="char-cell">
-                      <span className="char-label">Interaction & Motion</span>
-                      <p>{analysis.motion}</p>
-                    </div>
-                    <div className="char-cell">
-                      <span className="char-label">Conversion Techniques</span>
-                      <p>{analysis.conversionTechniques}</p>
-                    </div>
-                  </div>
+                    {analysis.retrievalNotes && (
+                      <div className="retrieval-notes-banner">
+                        <AlertCircle size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <span><strong>Retrieval Notice:</strong> {analysis.retrievalNotes}</span>
+                      </div>
+                    )}
 
-                  <div className="principles-box">
-                    <span className="principles-title">Extracted Studio Principles:</span>
-                    <ul>
-                      {analysis.extractedDesignPrinciples.map((principle, idx) => (
-                        <li key={idx}>{principle}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </article>
-              ))}
+                    {isFailed ? (
+                      <div className="error-banner" style={{ background: '#191111', borderColor: '#4a2525' }}>
+                        <p style={{ margin: '0 0 8px 0', fontSize: '13px' }}>
+                          <strong>No fabricated analysis generated:</strong> Gemini URL Context could not access this website directly. Natanel Studio enforces strict truthfulness and will not invent layout data.
+                        </p>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#cca5a5' }}>
+                          Please upload reference screenshots using the upload box above and click "Analyze Reference" to perform visual decomposition on the actual design.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {(() => {
+                          const shotsList: string[] = Array.isArray(analysis.screenshots)
+                            ? analysis.screenshots
+                            : analysis.screenshots
+                              ? ([analysis.screenshots.desktop, analysis.screenshots.mobile].filter(Boolean) as string[])
+                              : [];
+                          if (shotsList.length === 0) return null;
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <span className="char-label">Analyzed Reference Screenshots ({shotsList.length})</span>
+                              <div className="screenshot-previews">
+                                {shotsList.map((shot, sIdx) => (
+                                  <div key={sIdx} className="screenshot-thumb-card">
+                                    <img src={shot} alt={`Screenshot ${sIdx + 1}`} />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        <div className="characteristics-grid">
+                          <div className="char-cell">
+                            <span className="char-label">Layout Architecture</span>
+                            <p>{analysis.layout}</p>
+                          </div>
+                          <div className="char-cell">
+                            <span className="char-label">Typography & Contrast</span>
+                            <p>{analysis.typography}</p>
+                          </div>
+                          <div className="char-cell">
+                            <span className="char-label">Whitespace Cadence</span>
+                            <p>{analysis.whitespace}</p>
+                          </div>
+                          <div className="char-cell">
+                            <span className="char-label">Hero & Media Framing</span>
+                            <p>{analysis.heroComposition}</p>
+                          </div>
+                          <div className="char-cell">
+                            <span className="char-label">Image Treatment & Light</span>
+                            <p>{analysis.imageTreatment}</p>
+                          </div>
+                          <div className="char-cell">
+                            <span className="char-label">Section Transitions</span>
+                            <p>{analysis.sectionTransitions}</p>
+                          </div>
+                          <div className="char-cell">
+                            <span className="char-label">Interaction & Motion</span>
+                            <p>{analysis.motion}</p>
+                          </div>
+                          <div className="char-cell">
+                            <span className="char-label">Conversion Techniques</span>
+                            <p>{analysis.conversionTechniques}</p>
+                          </div>
+                        </div>
+
+                        {analysis.extractedDesignPrinciples && analysis.extractedDesignPrinciples.length > 0 && (
+                          <div className="principles-box">
+                            <span className="principles-title">Extracted Studio Principles:</span>
+                            <ul>
+                              {analysis.extractedDesignPrinciples.map((principle, idx) => (
+                                <li key={idx}>{principle}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           )}
 
@@ -656,10 +818,10 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
           <div className="section-intro">
             <div>
               <span className="eyebrow">STAGE 02.4 / QUALITY CONTROL</span>
-              <h2>Design Quality Critic & Slop Inspector</h2>
+              <h2>Design Quality Critic & Visual Slop Inspector</h2>
               <p className="section-description">
-                Evaluates hierarchy, typography contrast, spacing cadence, visual repetition, card proliferation,
-                image quality, brand consistency, and detects any residual generic AI clichés.
+                Inspects rendered hierarchy, typography tension, spacing cadence, mobile touch targets, and rejects generic AI slop.
+                Upload rendered desktop and mobile screenshots for visual evidence verification.
               </p>
             </div>
             <button
@@ -668,11 +830,80 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
               onClick={handleRunCritic}
             >
               {isRunningCritic ? (
-                <><RefreshCw size={14} className="spin" /> Evaluating Architecture...</>
+                <><RefreshCw size={14} className="spin" /> Inspecting Visual Craft...</>
               ) : (
                 <><ShieldCheck size={15} /> {criticReport ? 'Re-run Critic' : 'Run Design Critic'}</>
               )}
             </button>
+          </div>
+
+          {/* Screenshot Upload for Real Visual Inspection */}
+          <div className="critic-upload-row">
+            <div className="screenshot-upload-zone">
+              <div className="upload-label-row">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Monitor size={14} /> Desktop View Screenshot
+                </label>
+                <label className="file-upload-btn">
+                  <Upload size={12} /> {criticDesktopScreenshot ? 'Replace' : 'Upload'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => handleUploadCriticShot(e, setCriticDesktopScreenshot)}
+                  />
+                </label>
+              </div>
+              {criticDesktopScreenshot ? (
+                <div className="screenshot-thumb-card" style={{ width: '120px', height: '75px' }}>
+                  <img src={criticDesktopScreenshot} alt="Desktop Preview" />
+                  <button
+                    type="button"
+                    className="remove-shot-btn"
+                    onClick={() => setCriticDesktopScreenshot(null)}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <p className="muted" style={{ margin: 0, fontSize: '11.5px' }}>
+                  Upload desktop viewport screenshot for visual hierarchy and typographic tension review.
+                </p>
+              )}
+            </div>
+
+            <div className="screenshot-upload-zone">
+              <div className="upload-label-row">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Smartphone size={14} /> Mobile View Screenshot
+                </label>
+                <label className="file-upload-btn">
+                  <Upload size={12} /> {criticMobileScreenshot ? 'Replace' : 'Upload'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => handleUploadCriticShot(e, setCriticMobileScreenshot)}
+                  />
+                </label>
+              </div>
+              {criticMobileScreenshot ? (
+                <div className="screenshot-thumb-card" style={{ width: '60px', height: '90px' }}>
+                  <img src={criticMobileScreenshot} alt="Mobile Preview" />
+                  <button
+                    type="button"
+                    className="remove-shot-btn"
+                    onClick={() => setCriticMobileScreenshot(null)}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <p className="muted" style={{ margin: 0, fontSize: '11.5px' }}>
+                  Upload mobile viewport screenshot to visually verify touch targets and single-column reflow.
+                </p>
+              )}
+            </div>
           </div>
 
           {criticError && <div className="error-banner">{criticError}</div>}
@@ -681,7 +912,7 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
             <div className="empty-state-box">
               <ShieldCheck size={32} strokeWidth={1.2} />
               <h3>Design Quality Critic not yet executed</h3>
-              <p>Run the Critic to perform a comprehensive 12-category inspection of hierarchy, typography, and anti-slop rules.</p>
+              <p>Upload screenshots and run the Critic to perform a comprehensive 12-category inspection of visual hierarchy, typography, and anti-slop rules.</p>
               <button className="primary-button" onClick={handleRunCritic} style={{ marginTop: '16px' }}>
                 Run Quality Inspection
               </button>
@@ -690,12 +921,28 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
 
           {criticReport && (
             <div className="critic-report-container">
+              {/* Inspection Bar */}
+              <div className="critic-inspection-bar">
+                <span><strong>Inspection Evidence Mode:</strong></span>
+                <span className={`inspection-tag ${criticReport.inspectedScreenshots?.desktop ? 'active' : 'inactive'}`}>
+                  <Monitor size={14} /> Desktop Screenshot: {criticReport.inspectedScreenshots?.desktop ? 'Inspected' : 'None'}
+                </span>
+                <span className={`inspection-tag ${criticReport.inspectedScreenshots?.mobile ? 'active' : 'inactive'}`}>
+                  <Smartphone size={14} /> Mobile Screenshot: {criticReport.inspectedScreenshots?.mobile ? 'Inspected' : 'None'}
+                </span>
+                <span className="status-pill" style={{ marginLeft: 'auto' }}>
+                  {(criticReport.inspectedScreenshots?.desktop || criticReport.inspectedScreenshots?.mobile)
+                    ? `Visually Grounded (${(criticReport.inspectedScreenshots.desktop ? 1 : 0) + (criticReport.inspectedScreenshots.mobile ? 1 : 0)} shots)`
+                    : 'Architectural Spec Review'}
+                </span>
+              </div>
+
               <div className="critic-summary-card">
                 <div className="critic-summary-header">
                   <ShieldCheck size={24} className="success-icon" />
                   <div>
                     <span className="eyebrow">EXECUTIVE DESIGN CRITIQUE</span>
-                    <h3>Architectural Assessment</h3>
+                    <h3>Architectural & Visual Assessment</h3>
                   </div>
                 </div>
                 <p className="summary-text">{criticReport.summary}</p>
@@ -709,8 +956,30 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
                         <span className={`status-indicator status-${cat.status}`} />
                         <h4 className="cat-title">{cat.category.toUpperCase()}</h4>
                       </div>
-                      <span className="cat-score">{cat.score}/100</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {cat.evidenceLevel === 'visually_verified' && (
+                          <span className="evidence-badge evidence-verified">Visually Verified</span>
+                        )}
+                        {cat.evidenceLevel === 'architecture_inference' && (
+                          <span className="evidence-badge evidence-inference">Architecture Inferred</span>
+                        )}
+                        {cat.evidenceLevel === 'insufficient_evidence' && (
+                          <span className="evidence-badge evidence-insufficient">Insufficient Evidence</span>
+                        )}
+                        <span className="cat-score">{cat.score}/100</span>
+                      </div>
                     </div>
+
+                    {cat.visualObservations && cat.visualObservations.length > 0 && (
+                      <div className="visual-obs-section">
+                        <span className="section-tag">Visual Observations (from Screenshots):</span>
+                        <ul>
+                          {cat.visualObservations.map((obs, oIdx) => (
+                            <li key={oIdx}>{obs}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     <div className="findings-section">
                       <span className="section-tag">Key Observations:</span>

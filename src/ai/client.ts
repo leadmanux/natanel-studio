@@ -22,11 +22,15 @@ export async function requestArtDirections(project: Project): Promise<ArtDirecti
   return data.directions;
 }
 
-export async function requestReferenceAnalysis(url: string, project?: Project): Promise<ReferenceAnalysis> {
+export async function requestReferenceAnalysis(
+  url: string,
+  project?: Project,
+  screenshots?: string[]
+): Promise<ReferenceAnalysis> {
   const res = await fetch('/api/ai/analyze-reference', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, project }),
+    body: JSON.stringify({ url, project, screenshots }),
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: 'Failed to analyze reference URL' }));

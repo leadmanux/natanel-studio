@@ -429,6 +429,195 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
 
 .code-pill { font-family: monospace; font-size: 11px; background: #1d1d22; border: 1px solid #303036; padding: 2px 6px; color: #c4c4cd; }
 
+/* RETRIEVAL & CRITIC EVIDENCE BADGES */
+.retrieval-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 3px 8px;
+  border-radius: 2px;
+}
+.retrieval-status-badge.retrieval-success {
+  background: #112015;
+  border: 1px solid #2e5a3a;
+  color: #7bca8a;
+}
+.retrieval-status-badge.retrieval-limited {
+  background: #241c10;
+  border: 1px solid #6b4d1b;
+  color: #e5b95c;
+}
+.retrieval-status-badge.retrieval-failed {
+  background: #261111;
+  border: 1px solid #632626;
+  color: #f1a2a2;
+}
+
+.retrieval-notes-banner {
+  border: 1px solid #28282d;
+  background: #101013;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #a4a4ac;
+  line-height: 1.45;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.evidence-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 2px 6px;
+}
+.evidence-badge.evidence-verified {
+  background: #132417;
+  border: 1px solid #2e5a3a;
+  color: #7bca8a;
+}
+.evidence-badge.evidence-inference {
+  background: #171c24;
+  border: 1px solid #2d3e52;
+  color: #92bce6;
+}
+.evidence-badge.evidence-insufficient {
+  background: #241b12;
+  border: 1px solid #573f1d;
+  color: #e5b369;
+}
+
+.critic-inspection-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #151518;
+  border: 1px solid #26262a;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: #b7b7be;
+  flex-wrap: wrap;
+}
+.inspection-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  font-size: 11px;
+}
+.inspection-tag.active {
+  color: #7bca8a;
+}
+.inspection-tag.inactive {
+  color: #717178;
+}
+
+.visual-obs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #1f1f23;
+  padding-top: 8px;
+}
+.visual-obs-section ul {
+  margin: 0;
+  padding-left: 15px;
+  font-size: 11.5px;
+  color: #99c2a2;
+  line-height: 1.45;
+  display: grid;
+  gap: 3px;
+}
+
+/* SCREENSHOT UPLOAD CONTROLS */
+.screenshot-upload-zone {
+  border: 1px dashed #303036;
+  background: #0d0d0f;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.upload-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.upload-label-row label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #8c8c94;
+}
+.file-upload-btn {
+  border: 1px solid #36363d;
+  background: #1a1a1e;
+  color: #d8d8de;
+  padding: 6px 12px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.file-upload-btn:hover {
+  background: #24242a;
+  color: #ffffff;
+}
+.screenshot-previews {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.screenshot-thumb-card {
+  position: relative;
+  width: 90px;
+  height: 60px;
+  border: 1px solid #34343a;
+  background: #000000;
+  overflow: hidden;
+}
+.screenshot-thumb-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.remove-shot-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(0,0,0,0.75);
+  border: 0;
+  color: #e56c6c;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+}
+.remove-shot-btn:hover {
+  background: #521818;
+  color: #ffffff;
+}
+
+.critic-upload-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
 @media (max-width: 1180px) {
   .directions-grid { grid-template-columns: 1fr; }
   .critic-categories-grid { grid-template-columns: repeat(2, 1fr); }

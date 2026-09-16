@@ -24,9 +24,7 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
   );
   const [refUrlInput, setRefUrlInput] = useState('');
   const [referenceSites, setReferenceSites] = useState<string[]>(
-    project.brand.referenceSites.length > 0
-      ? project.brand.referenceSites
-      : ['https://linear.app', 'https://kyle.works']
+    project.brand.referenceSites.length > 0 ? project.brand.referenceSites : []
   );
   const [colorsInput, setColorsInput] = useState(
     project.brand.colors.length > 0 ? project.brand.colors.join(', ') : '#0d0d0f, #161619, #e8e6e1, #b3aba0'
