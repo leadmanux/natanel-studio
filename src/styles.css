@@ -267,6 +267,7 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
 .category-critique-card { border: 1px solid #26262a; background: #131316; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 .category-critique-card.status-alert { border-color: #5c2626; background: #1c1111; }
 .category-critique-card.status-warning { border-color: #57441a; background: #1a150e; }
+.category-critique-card.status-not_evaluated { border-color: #27272a; background: #111113; opacity: 0.88; }
 
 .category-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #202024; padding-bottom: 10px; }
 .cat-title-group { display: flex; align-items: center; gap: 8px; }
@@ -274,6 +275,7 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
 .status-indicator.status-passed { background: #7bca8a; }
 .status-indicator.status-warning { background: #e5b95c; }
 .status-indicator.status-alert { background: #e56c6c; }
+.status-indicator.status-not_evaluated { background: #71717a; }
 .cat-title { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; color: #e5e5e0; }
 .cat-score { font-family: monospace; font-size: 12px; font-weight: 600; color: #a2a2ab; }
 

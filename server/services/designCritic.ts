@@ -198,22 +198,26 @@ Return structured JSON containing summary, array of category reviews (category, 
       summary: parsed.summary,
       categories: parsed.categories.map((c: any) => ({
         ...c,
-        evidenceLevel: c.evidenceLevel || (hasImages ? 'visually_verified' : 'architecture_inference'),
-        visualObservations: c.visualObservations || [],
+        score: typeof c.score === 'number' ? c.score : null,
+        evidenceLevel: hasImages
+          ? (c.evidenceLevel === 'visually_verified' ? 'visually_verified' : c.evidenceLevel || 'architecture_inference')
+          : (c.evidenceLevel === 'visually_verified' ? 'architecture_inference' : c.evidenceLevel || 'architecture_inference'),
+        visualObservations: hasImages ? (c.visualObservations || []) : [],
       })),
       findings: parsed.findings,
       evaluatedAt: new Date().toISOString(),
+      source: 'ai',
       inspectedScreenshots: {
-        desktop: hasDesktop,
-        mobile: hasMobile,
-        count: imageParts.length,
+        desktop: hasImages && hasDesktop,
+        mobile: hasImages && hasMobile,
+        count: hasImages ? imageParts.length : 0,
       },
     };
   }
 
   private evaluateAlgorithmicReport(
     project: Project,
-    screenshots?: string[] | { desktop?: string; mobile?: string }
+    _screenshots?: string[] | { desktop?: string; mobile?: string }
   ): DesignCriticReport {
     const isRtl = project.business.direction === 'rtl';
     const hasApprovedArtDirection = !!project.designSystem.artDirection;
@@ -222,168 +226,188 @@ Return structured JSON containing summary, array of category reviews (category, 
     const hasCTA = allSections.some((s) => s.componentRegistryId.includes('cta') || s.name.toLowerCase().includes('cta') || s.componentRegistryId.includes('forms'));
     const hasTrust = allSections.some((s) => s.componentRegistryId.includes('cro') || s.componentRegistryId.includes('testimonials'));
 
-    const count = Array.isArray(screenshots)
-      ? screenshots.length
-      : screenshots && typeof screenshots === 'object'
-      ? (screenshots.desktop ? 1 : 0) + (screenshots.mobile ? 1 : 0)
-      : 0;
+    const sectionComponentIds = allSections.map((s) => s.componentRegistryId);
+    const hasConsecutiveDuplicates = sectionComponentIds.some((id, i) => i > 0 && id === sectionComponentIds[i - 1]);
+    const uniqueComponentTypes = new Set(sectionComponentIds).size;
+    const hasSectionVariety = uniqueComponentTypes >= Math.min(3, sectionComponentIds.length) && !hasConsecutiveDuplicates;
 
-    const evidenceLevel = count > 0 ? 'visually_verified' : 'architecture_inference';
-
+    // CRITICAL: The deterministic fallback NEVER inspects screenshot pixels.
+    // - evidenceLevel must NEVER be 'visually_verified'.
+    // - visualObservations must ALWAYS be empty.
+    // - inspectedScreenshots must indicate NO AI inspection took place.
+    // - Visual-only claims that cannot be verified from metadata are marked as 'insufficient_evidence' with score: null.
     const categories: CategoryCritique[] = [
       {
         category: 'hierarchy',
         status: hasHero ? 'passed' : 'alert',
-        score: hasHero ? 94 : 58,
+        score: hasHero ? 82 : 45,
         findings: hasHero
-          ? ['Clear focal anchor established via above-the-fold hero composition.', 'Distinct typographic contrast between display statement and secondary proof.']
-          : ['No primary focal anchor detected above the fold.', 'Headings compete equally for visual attention.'],
+          ? ['Hero section component planned above the fold as initial focal anchor in component tree.']
+          : ['No primary hero section detected above the fold in page component tree.'],
         actionableCorrections: hasHero
-          ? ['Maintain strict 1.333 typographic stepping across viewport scaling.']
-          : ['Introduce a dominant hero section with a singular primary thesis statement.'],
-        evidenceLevel,
-        visualObservations: count > 0 ? ['Hero section establishes primary above-the-fold focal prominence.'] : [],
+          ? ['Ensure heading component enforces clear scale contrast when rendered.']
+          : ['Introduce a dedicated hero component to anchor page hierarchy.'],
+        evidenceLevel: 'architecture_inference',
+        visualObservations: [],
       },
       {
         category: 'typography',
-        status: 'passed',
-        score: 92,
+        status: 'not_evaluated',
+        score: null,
         findings: [
-          `Disciplined typography: ${project.designSystem.typography || 'High-contrast display serif paired with neutral grotesk body'}.`,
-          'Line lengths constrained to 65-75 characters for optimal reading ergonomics.',
+          `Specification designates "${project.designSystem.typography || 'Standard typography'}", but rendered typographic pairing, line length, and scale contrast cannot be visually verified without AI screenshot inspection.`,
         ],
         actionableCorrections: [
-          'Verify font licensing and ensure Hebrew subset embedding for optimal web font load speed.',
+          'Upload rendered screenshots for multimodal AI typography and readability inspection.',
         ],
-        evidenceLevel,
-        visualObservations: count > 0 ? ['Typographic scale maintains high contrast between headings and body text.'] : [],
+        evidenceLevel: 'insufficient_evidence',
+        visualObservations: [],
       },
       {
         category: 'spacing',
-        status: 'passed',
-        score: 90,
+        status: 'not_evaluated',
+        score: null,
         findings: [
-          'Generous macro vertical rhythm: 96px to 128px section gutters prevent claustrophobic density.',
-          'Inner element grouping respects the 2x horizontal-to-vertical padding rule on interactive triggers.',
+          'Exact rendered padding, gutter rhythm, and element breathing room cannot be verified from metadata alone without AI screenshot inspection.',
         ],
         actionableCorrections: [
-          'Ensure mobile gutters step down gracefully to 48px to preserve touch density without horizontal overflow.',
+          'Upload rendered screenshots to visually inspect negative space, padding rhythm, and section transitions.',
         ],
-        evidenceLevel,
-        visualObservations: count > 0 ? ['Section gutters provide clear breathing room without cramped elements.'] : [],
+        evidenceLevel: 'insufficient_evidence',
+        visualObservations: [],
       },
       {
         category: 'visual repetition',
-        status: 'passed',
-        score: 88,
-        findings: [
-          'Varied section rhythm: alternates between 21:9 panoramic breaks, asymmetric editorial case studies, and tabular services.',
-          'Avoids monotonous identical 3-column rows throughout the scroll path.',
-        ],
-        actionableCorrections: [
-          'Ensure case study cards vary in horizontal offset to reinforce editorial asymmetry.',
-        ],
-        evidenceLevel,
+        status: hasSectionVariety ? 'passed' : 'warning',
+        score: hasSectionVariety ? 82 : 60,
+        findings: hasSectionVariety
+          ? [`Component sequence demonstrates structural variety across ${uniqueComponentTypes} distinct component definition(s) without consecutive duplicate sections.`]
+          : ['Consecutive duplicate component types or low component variety detected in page section sequence.'],
+        actionableCorrections: hasSectionVariety
+          ? ['Maintain section cadence during layout implementation.']
+          : ['Introduce alternating editorial or asymmetric section layouts to avoid repetition.'],
+        evidenceLevel: 'architecture_inference',
+        visualObservations: [],
       },
       {
         category: 'excessive cards',
-        status: 'passed',
-        score: 96,
+        status: 'not_evaluated',
+        score: null,
         findings: [
-          'Zero nested card containers detected.',
-          'Single-plane visual hierarchy: subtle hairline dividers and whitespace replace artificial card boundaries.',
+          'Card container nesting, borders, and visual card density cannot be verified from metadata alone without AI screenshot inspection.',
         ],
         actionableCorrections: [
-          'Retain the zero-card rule on mobile viewport to prevent stacked boxed-in visual fatigue.',
+          'Inspect rendered layout to confirm absence of nested cards and excessive boxed containers.',
         ],
-        evidenceLevel,
+        evidenceLevel: 'insufficient_evidence',
+        visualObservations: [],
       },
       {
         category: 'image quality',
         status: project.assets.length > 0 ? 'passed' : 'warning',
-        score: project.assets.length > 0 ? 95 : 72,
+        score: project.assets.length > 0 ? 80 : 55,
         findings: project.assets.length > 0
-          ? ['Cinematic aspect ratios planned: 21:9 panoramic banners, 4:1 elevations, and 4:5 authentic portraits.', 'Visual consistency guidelines enforce cohesive natural side-lighting and material authenticity.']
-          : ['Asset manifest is not finalized yet. Stock placeholders risk degrading the high-craft presentation.'],
-        actionableCorrections: [
-          'Execute asset generation using gemini-3.1-flash-image with 4K resolution on flagship panoramic assets.',
-        ],
-        evidenceLevel,
+          ? [`${project.assets.length} planned image asset(s) defined in manifest with specified aspect ratios (${[...new Set(project.assets.map((a) => a.aspectRatio))].join(', ')}).`]
+          : ['No planned image assets configured in the project manifest.'],
+        actionableCorrections: project.assets.length > 0
+          ? ['Generate production image assets and inspect rendered compositions in preview.']
+          : ['Configure image asset requirements in the Asset Planner.'],
+        evidenceLevel: 'architecture_inference',
+        visualObservations: [],
       },
       {
         category: 'brand consistency',
         status: hasApprovedArtDirection ? 'passed' : 'warning',
-        score: hasApprovedArtDirection ? 95 : 68,
+        score: hasApprovedArtDirection ? 84 : 58,
         findings: [
-          `Art direction "${project.designSystem.artDirection || 'Pending'}" matches target audience: ${project.business.targetAudience || 'Discerning clientele'}.`,
-          'Restrained neutral palette prevents artificial color clashes.',
+          hasApprovedArtDirection
+            ? `Art direction "${project.designSystem.artDirection}" configured for ${project.business.industry || 'the business'} target audience (${project.business.targetAudience || 'discerning clientele'}).`
+            : 'Art direction specification is pending definition.',
         ],
         actionableCorrections: [
-          'Ensure accent color usage is restricted exclusively to interactive conversion commitments.',
+          hasApprovedArtDirection
+            ? 'Ensure implementation tokens strictly follow configured art direction.'
+            : 'Define cohesive art direction in the Art Director workspace.',
         ],
-        evidenceLevel,
+        evidenceLevel: 'architecture_inference',
+        visualObservations: [],
       },
       {
         category: 'conversion clarity',
         status: hasTrust ? 'passed' : 'warning',
-        score: hasTrust ? 91 : 70,
-        findings: hasTrust
-          ? ['Trust strip and verified client testimonials address objection points early in the browsing journey.', 'Value proposition is stated in concrete transformation terms rather than vague adjectives.']
-          : ['Trust and proof markers should be elevated closer to the primary call-to-action.'],
-        actionableCorrections: [
-          'Add quantitative proof metrics directly adjacent to the inquiry intake triggers.',
+        score: hasTrust ? 80 : 55,
+        findings: [
+          hasTrust
+            ? 'Social proof / trust components included in page architecture to address user objections.'
+            : 'No dedicated social proof or trust component detected in page architecture.',
         ],
-        evidenceLevel,
+        actionableCorrections: [
+          hasTrust
+            ? 'Verify placement of trust signals relative to key conversion commitment points.'
+            : 'Add testimonials or social proof components to the section sequence.',
+        ],
+        evidenceLevel: 'architecture_inference',
+        visualObservations: [],
       },
       {
         category: 'CTA prominence',
         status: hasCTA ? 'passed' : 'alert',
-        score: hasCTA ? 94 : 55,
-        findings: hasCTA
-          ? ['Primary action trigger pinned in navigation and decisive contrast closure section placed at page bottom.', 'Unambiguous CTA wording replaces passive "Submit" labels.']
-          : ['Missing decisive high-contrast conversion closure section.'],
-        actionableCorrections: [
-          'Ensure primary action button maintains minimum 48px height on touch devices.',
+        score: hasCTA ? 80 : 45,
+        findings: [
+          hasCTA
+            ? 'Dedicated call-to-action component configured in page architecture.'
+            : 'No dedicated call-to-action or inquiry component found in section list.',
         ],
-        evidenceLevel,
+        actionableCorrections: [
+          hasCTA
+            ? 'Verify call-to-action button contrast and label clarity during implementation.'
+            : 'Insert a conversion CTA section to guide user action.',
+        ],
+        evidenceLevel: 'architecture_inference',
+        visualObservations: [],
       },
       {
         category: 'mobile experience',
-        status: 'passed',
-        score: 92,
+        status: 'not_evaluated',
+        score: null,
         findings: [
-          'Mobile quality ratings of chosen components are 5/5.',
-          'Touch targets exceed 44px with comfortable padding and thumb-zone reachability.',
+          'Rendered touch target dimensions (>=44px), thumb-zone ergonomics, and mobile reflow cannot be verified from metadata alone without AI screenshot inspection.',
         ],
         actionableCorrections: [
-          'Test horizontal drag reels on small screens to guarantee smooth native momentum scrolling.',
+          'Upload a mobile viewport screenshot for visual touch target and reflow evaluation.',
         ],
-        evidenceLevel,
+        evidenceLevel: 'insufficient_evidence',
+        visualObservations: [],
       },
       {
         category: 'RTL quality',
         status: isRtl ? 'passed' : 'passed',
-        score: isRtl ? 94 : 98,
-        findings: isRtl
-          ? ['RTL-ready approved components selected with reversed optical anchors, font tracking adjustments, and logical margins.']
-          : ['Standard LTR flow validated with clean left-axis alignment.'],
-        actionableCorrections: isRtl
-          ? ['Verify bidirectional numbers and currency symbols render without punctuation flipping.']
-          : ['No action required for LTR configuration.'],
-        evidenceLevel,
+        score: isRtl ? 80 : 85,
+        findings: [
+          isRtl
+            ? 'Project configured with RTL layout direction in business settings.'
+            : 'Standard LTR configuration active in business settings.',
+        ],
+        actionableCorrections: [
+          isRtl
+            ? 'Upload RTL screenshots to visually verify mirrored alignments, margins, and bidirectional punctuation.'
+            : 'No action required for LTR configuration.',
+        ],
+        evidenceLevel: 'architecture_inference',
+        visualObservations: [],
       },
       {
         category: 'AI-generated website feeling',
-        status: 'passed',
-        score: 98,
+        status: 'not_evaluated',
+        score: null,
         findings: [
-          'Completely free of AI clichés: No purple-to-blue gradients, no random cyan glows, no meaningless bento grids, and no SaaS buzzwords like "supercharge".',
-          'Authentic editorial spacing and typography create a genuine human-designed atelier aesthetic.',
+          `Design system metadata contains ${project.designSystem.avoidRules.length} anti-slop avoid rule(s), but rendered visual aesthetics, gradients, and styling authenticity cannot be verified without AI screenshot inspection.`,
         ],
         actionableCorrections: [
-          'Strictly maintain the avoidRules list during code compilation.',
+          'Upload rendered screenshots for AI visual slop and gradient inspection.',
         ],
-        evidenceLevel,
+        evidenceLevel: 'insufficient_evidence',
+        visualObservations: [],
       },
     ];
 
@@ -391,14 +415,14 @@ Return structured JSON containing summary, array of category reviews (category, 
       {
         category: 'visual',
         severity: 'low',
-        message: 'Ensure 21:9 hero image has appropriate focal-point centering on mobile viewport.',
-        suggestedFix: 'Apply object-position: center or mobile-specific crop in CSS.',
+        message: 'Ensure hero media has appropriate focal-point centering on smaller viewports.',
+        suggestedFix: 'Apply object-position: center or mobile-specific crop in CSS styling.',
       },
       {
         category: 'cro',
         severity: 'low',
-        message: 'Ensure trust badges have high visual contrast against dark limestone background.',
-        suggestedFix: 'Use bone-white monochrome SVGs with 0.85 opacity.',
+        message: 'Ensure trust and testimonial markers maintain high visual contrast against dark backgrounds.',
+        suggestedFix: 'Use high-contrast monochrome vector assets with adequate padding.',
       },
     ];
 
@@ -406,20 +430,21 @@ Return structured JSON containing summary, array of category reviews (category, 
       findings.push({
         category: 'rtl',
         severity: 'low',
-        message: 'Verify quotation marks in client testimonials orient properly according to Hebrew typographic conventions.',
+        message: 'Verify quotation marks and punctuation in testimonials orient properly according to Hebrew typographic conventions.',
         suggestedFix: 'Use localized Hebrew typographic quotes in quotation component.',
       });
     }
 
     return {
-      summary: `Comprehensive Design Critic evaluation for ${project.business.businessName || 'the project'}. The structure achieves strong architectural discipline, pristine typography, verified CRO mechanisms, and completely rejects AI design clichés.`,
+      summary: `Architectural specification evaluation for ${project.business.businessName || 'the project'} (Deterministic Fallback). Evaluates component sequence, hierarchy anchors, and metadata rules. Visual-only categories (typography, spacing, excessive cards, mobile ergonomics, and visual slop) remain unevaluated without AI screenshot inspection.`,
       categories,
       findings,
       evaluatedAt: new Date().toISOString(),
+      source: 'deterministic_fallback',
       inspectedScreenshots: {
-        desktop: count > 0,
-        mobile: count > 1,
-        count,
+        desktop: false,
+        mobile: false,
+        count: 0,
       },
     };
   }

@@ -966,7 +966,9 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
                         {cat.evidenceLevel === 'insufficient_evidence' && (
                           <span className="evidence-badge evidence-insufficient">Insufficient Evidence</span>
                         )}
-                        <span className="cat-score">{cat.score}/100</span>
+                        <span className="cat-score">
+                          {cat.score !== null && cat.score !== undefined ? `${cat.score}/100` : 'Unevaluated'}
+                        </span>
                       </div>
                     </div>
 

@@ -102,7 +102,7 @@ export interface CategoryCritique {
     | 'RTL quality'
     | 'AI-generated website feeling';
   status: 'passed' | 'warning' | 'alert' | 'not_evaluated';
-  score: number; // 0 - 100
+  score: number | null; // 0 - 100 or null when unevaluated / insufficient evidence
   evidenceLevel?: 'visually_verified' | 'architecture_inference' | 'insufficient_evidence';
   visualObservations?: string[];
   findings: string[];
