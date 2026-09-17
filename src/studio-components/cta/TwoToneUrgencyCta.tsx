@@ -30,7 +30,9 @@ export function TwoToneUrgencyCta(props: StudioComponentProps<TwoToneCtaContent>
         onlineCta: 'Book Expedited Intake Online',
       };
 
-  const content = { ...defaultContent, ...props.content };
+  const content = props.contentMode === 'production'
+    ? { ...(props.content || {}) }
+    : { ...defaultContent, ...(props.content || {}) };
 
   return (
     <StudioComponentWrapper {...props}>
@@ -55,10 +57,12 @@ export function TwoToneUrgencyCta(props: StudioComponentProps<TwoToneCtaContent>
             gap: '24px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--studio-accent)', fontWeight: 700 }}>
-            <Shield size={16} />
-            <span>{content.urgencyNote}</span>
-          </div>
+          {content.urgencyNote && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--studio-accent)', fontWeight: 700 }}>
+              <Shield size={16} />
+              <span>{content.urgencyNote}</span>
+            </div>
+          )}
 
           <div
             style={{
@@ -69,62 +73,69 @@ export function TwoToneUrgencyCta(props: StudioComponentProps<TwoToneCtaContent>
               gap: '28px',
             }}
           >
-            <h2
-              style={{
-                fontFamily: 'var(--studio-font-display)',
-                fontSize: 'clamp(24px, 3.2vw, 36px)',
-                fontWeight: 600,
-                color: 'var(--studio-text)',
-                margin: 0,
-                maxWidth: '620px',
-              }}
-            >
-              {content.headline}
-            </h2>
-
-            {/* Actions */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-              <a
-                href={`tel:${content.phone}`}
+            {content.headline && (
+              <h2
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '14px 24px',
-                  minHeight: '48px',
-                  borderRadius: 'var(--studio-radius)',
-                  backgroundColor: 'var(--studio-accent)',
-                  color: '#111',
-                  fontSize: '13.5px',
-                  fontWeight: 700,
-                  textDecoration: 'none',
-                }}
-              >
-                <PhoneCall size={16} />
-                <span>{content.phoneLabel}</span>
-              </a>
-
-              <a
-                href="#intake"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '14px 24px',
-                  minHeight: '48px',
-                  borderRadius: 'var(--studio-radius)',
-                  backgroundColor: 'var(--studio-bg)',
-                  border: '1px solid var(--studio-border)',
-                  color: 'var(--studio-text)',
-                  fontSize: '13.5px',
+                  fontFamily: 'var(--studio-font-display)',
+                  fontSize: 'clamp(24px, 3.2vw, 36px)',
                   fontWeight: 600,
-                  textDecoration: 'none',
+                  color: 'var(--studio-text)',
+                  margin: 0,
+                  maxWidth: '620px',
                 }}
               >
-                <Calendar size={16} />
-                <span>{content.onlineCta}</span>
-              </a>
-            </div>
+                {content.headline}
+              </h2>
+            )}
+
+            {(content.phone || content.onlineCta) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+                {content.phone && content.phoneLabel && (
+                  <a
+                    href={`tel:${content.phone}`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '14px 24px',
+                      minHeight: '48px',
+                      borderRadius: 'var(--studio-radius)',
+                      backgroundColor: 'var(--studio-accent)',
+                      color: '#111',
+                      fontSize: '13.5px',
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <PhoneCall size={16} />
+                    <span>{content.phoneLabel}</span>
+                  </a>
+                )}
+
+                {content.onlineCta && (
+                  <a
+                    href="#intake"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '14px 24px',
+                      minHeight: '48px',
+                      borderRadius: 'var(--studio-radius)',
+                      backgroundColor: 'var(--studio-bg)',
+                      border: '1px solid var(--studio-border)',
+                      color: 'var(--studio-text)',
+                      fontSize: '13.5px',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <Calendar size={16} />
+                    <span>{content.onlineCta}</span>
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
