@@ -9,6 +9,7 @@
     "start": "node dist/server.cjs",
     "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit && tsc -p server/tsconfig.json --noEmit",
+    "validate:registry": "tsx scripts/validate-registry.ts",
     "preview": "vite preview"
   },
   "dependencies": {

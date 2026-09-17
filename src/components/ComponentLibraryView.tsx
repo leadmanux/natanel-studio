@@ -3,6 +3,7 @@ import {
   type ComponentDefinition,
   type ComponentCategory,
 } from '@shared/componentRegistry';
+import { hasComponentImplementation } from '@shared/componentImplementations';
 import {
   componentImportAdapters,
   type ExternalComponentPayload,
@@ -117,10 +118,18 @@ export function ComponentLibraryView({ onSelectComponent }: ComponentLibraryView
     compId: string,
     newStatus: 'candidate' | 'approved' | 'rejected'
   ) => {
+    if (newStatus === 'approved' && !hasComponentImplementation(compId)) {
+      alert(
+        'A component may not transition to approved unless a real render implementation exists. Metadata-only external candidates must remain Candidate until implementation exists.'
+      );
+      return;
+    }
+
     try {
       await componentRegistryRepository.updateStatus(compId, newStatus);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update status:', err);
+      alert(err.message || 'Failed to update component status.');
     }
   };
 
@@ -396,7 +405,13 @@ export function ComponentLibraryView({ onSelectComponent }: ComponentLibraryView
                           handleUpdateStatus(comp.id, e.target.value as any)
                         }
                       >
-                        <option value="approved">Approved (Eligible)</option>
+                        <option
+                          value="approved"
+                          disabled={!hasComponentImplementation(comp.id)}
+                          title={!hasComponentImplementation(comp.id) ? 'Requires real render implementation before approval' : undefined}
+                        >
+                          {hasComponentImplementation(comp.id) ? 'Approved (Eligible)' : 'Approved (Missing Code)'}
+                        </option>
                         <option value="candidate">Candidate (Under Review)</option>
                         <option value="rejected">Rejected (Barred)</option>
                       </select>

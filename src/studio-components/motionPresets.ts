@@ -59,45 +59,6 @@ export function getMotionVariants(
         },
       };
 
-    case 'parallaxImage':
-      return {
-        initial: { y: 18, opacity: 0.95 },
-        animate: {
-          y: 0,
-          opacity: 1,
-          transition: { duration: 0.75, ease: 'easeOut' },
-        },
-      };
-
-    case 'stickyNarrative':
-      return {
-        initial: { opacity: 0, y: 12 },
-        animate: {
-          opacity: 1,
-          y: 0,
-          transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
-        },
-      };
-
-    case 'horizontalScroll':
-      return {
-        initial: { x: isRtl ? -24 : 24, opacity: 0 },
-        animate: {
-          x: 0,
-          opacity: 1,
-          transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
-        },
-      };
-
-    case 'marquee':
-      return {
-        initial: { opacity: 0.9 },
-        animate: {
-          opacity: 1,
-          transition: { duration: 0.3 },
-        },
-      };
-
     case 'stackedCards':
       return {
         initial: { opacity: 0, y: 24, scale: 0.98 },
@@ -106,15 +67,6 @@ export function getMotionVariants(
           y: 0,
           scale: 1,
           transition: { duration: 0.5, ease: [0.2, 0.8, 0.2, 1] },
-        },
-      };
-
-    case 'sectionPin':
-      return {
-        initial: { opacity: 0 },
-        animate: {
-          opacity: 1,
-          transition: { duration: 0.45, ease: 'easeOut' },
         },
       };
 

@@ -36,7 +36,30 @@ export function GuaranteeBlock(props: StudioComponentProps<GuaranteeContent>) {
       };
 
   const isProduction = props.contentMode === 'production';
-  const hasCustomGuarantee = Boolean(props.content?.headline || (props.content?.points && props.content.points.length > 0));
+
+  // In production mode, NO demo guarantee headline, badge, description, warranty, or points can leak.
+  const content: GuaranteeContent = isProduction
+    ? {
+        badge: props.content?.badge?.trim() || undefined,
+        headline: props.content?.headline?.trim() || undefined,
+        description: props.content?.description?.trim() || undefined,
+        points: Array.isArray(props.content?.points)
+          ? props.content.points.filter((pt) => typeof pt === 'string' && pt.trim().length > 0)
+          : undefined,
+      }
+    : {
+        badge: props.content?.badge ?? defaultContent.badge,
+        headline: props.content?.headline ?? defaultContent.headline,
+        description: props.content?.description ?? defaultContent.description,
+        points: props.content?.points ?? defaultContent.points,
+      };
+
+  const hasCustomGuarantee = Boolean(
+    content.headline ||
+    content.badge ||
+    content.description ||
+    (content.points && content.points.length > 0)
+  );
 
   if (isProduction && !hasCustomGuarantee) {
     return (
@@ -59,13 +82,6 @@ export function GuaranteeBlock(props: StudioComponentProps<GuaranteeContent>) {
       </StudioComponentWrapper>
     );
   }
-
-  const content: GuaranteeContent = {
-    badge: props.content?.badge || (isProduction ? undefined : defaultContent.badge),
-    headline: props.content?.headline || defaultContent.headline,
-    description: props.content?.description || (isProduction ? undefined : defaultContent.description),
-    points: props.content?.points || (isProduction ? [] : defaultContent.points),
-  };
 
   return (
     <StudioComponentWrapper {...props}>
@@ -92,80 +108,90 @@ export function GuaranteeBlock(props: StudioComponentProps<GuaranteeContent>) {
           }}
         >
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(212, 175, 55, 0.1)',
-                border: '1px solid var(--studio-accent)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--studio-accent)',
-                flexShrink: 0,
-              }}
-            >
-              <ShieldCheck size={20} />
-            </div>
-            <div>
-              <span
+          {(content.badge || content.headline) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div
                 style={{
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(212, 175, 55, 0.1)',
+                  border: '1px solid var(--studio-accent)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: 'var(--studio-accent)',
-                  display: 'block',
+                  flexShrink: 0,
                 }}
               >
-                {content.badge}
-              </span>
-              <h3
-                style={{
-                  fontFamily: 'var(--studio-font-display)',
-                  fontSize: '22px',
-                  fontWeight: 600,
-                  color: 'var(--studio-text)',
-                  margin: 0,
-                }}
-              >
-                {content.headline}
-              </h3>
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                {content.badge && (
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      letterSpacing: '0.1em',
+                      textTransform: 'uppercase',
+                      color: 'var(--studio-accent)',
+                      display: 'block',
+                    }}
+                  >
+                    {content.badge}
+                  </span>
+                )}
+                {content.headline && (
+                  <h3
+                    style={{
+                      fontFamily: 'var(--studio-font-display)',
+                      fontSize: '22px',
+                      fontWeight: 600,
+                      color: 'var(--studio-text)',
+                      margin: 0,
+                    }}
+                  >
+                    {content.headline}
+                  </h3>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          <p style={{ fontSize: '15px', lineHeight: 1.65, color: 'var(--studio-muted)', margin: 0 }}>
-            {content.description}
-          </p>
+          {content.description && (
+            <p style={{ fontSize: '15px', lineHeight: 1.65, color: 'var(--studio-muted)', margin: 0 }}>
+              {content.description}
+            </p>
+          )}
 
           {/* Guarantee Checklist */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' }}>
-            {content.points?.map((pt, idx) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--studio-bg)',
-                    border: '1px solid var(--studio-accent)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--studio-accent)',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Check size={12} />
+          {content.points && content.points.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' }}>
+              {content.points.map((pt, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--studio-bg)',
+                      border: '1px solid var(--studio-accent)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--studio-accent)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Check size={12} />
+                  </div>
+                  <span style={{ fontSize: '14px', color: 'var(--studio-text)', fontWeight: 500 }}>
+                    {pt}
+                  </span>
                 </div>
-                <span style={{ fontSize: '14px', color: 'var(--studio-text)', fontWeight: 500 }}>
-                  {pt}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </StudioComponentWrapper>

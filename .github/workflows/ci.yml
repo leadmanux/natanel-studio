@@ -20,5 +20,7 @@ jobs:
         run: npm install
       - name: Typecheck
         run: npm run typecheck
+      - name: Validate Component Registry
+        run: npm run validate:registry
       - name: Build
         run: npm run build

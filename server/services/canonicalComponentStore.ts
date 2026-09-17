@@ -1,4 +1,7 @@
+import fs from 'fs';
+import path from 'path';
 import { demoComponents, type ComponentDefinition } from '../../shared/componentRegistry';
+import { hasComponentImplementation } from '../../shared/componentImplementations';
 import {
   type ComponentRegistryPersistence,
   createComponentPersistence,
@@ -124,13 +127,36 @@ export class CanonicalComponentStore {
       throw new Error(`Component with ID "${id}" does not exist in canonical registry.`);
     }
 
-    // Enforce mandate: External candidate missing provenance cannot be approved
-    if (newStatus === 'approved' && existing.source !== 'internal') {
-      const provenance = validateProvenance(existing);
-      if (!provenance.valid) {
+    // Enforce mandate: A component may not transition to approved unless a real render implementation exists.
+    // Metadata-only external candidates must remain Candidate until implementation exists.
+    if (newStatus === 'approved') {
+      if (!hasComponentImplementation(id)) {
         throw new Error(
-          `Cannot approve external component "${existing.name || id}": Provenance is incomplete. Missing: ${provenance.missing.join(', ')}.`
+          `Cannot approve component "${existing.name || id}": No render implementation exists in the studio component registry. Metadata-only candidates must remain Candidate until implementation exists.`
         );
+      }
+
+      if (!existing.codeLocation) {
+        throw new Error(
+          `Cannot approve component "${existing.name || id}": Missing codeLocation metadata.`
+        );
+      }
+
+      const diskPath = path.resolve(process.cwd(), existing.codeLocation);
+      if (!fs.existsSync(diskPath)) {
+        throw new Error(
+          `Cannot approve component "${existing.name || id}": Implementation file does not exist on disk at "${existing.codeLocation}".`
+        );
+      }
+
+      // Provenance check for external components
+      if (existing.source !== 'internal') {
+        const provenance = validateProvenance(existing);
+        if (!provenance.valid) {
+          throw new Error(
+            `Cannot approve external component "${existing.name || id}": Provenance is incomplete. Missing: ${provenance.missing.join(', ')}.`
+          );
+        }
       }
     }
 

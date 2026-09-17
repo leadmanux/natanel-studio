@@ -6,12 +6,7 @@ export type StudioMotionPreset =
   | 'clipReveal'
   | 'textStagger'
   | 'imageScaleOnScroll'
-  | 'parallaxImage'
-  | 'stickyNarrative'
-  | 'horizontalScroll'
-  | 'marquee'
   | 'stackedCards'
-  | 'sectionPin'
   | 'fadeSettle';
 
 export type StudioIndustryPreset =
