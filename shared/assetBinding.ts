@@ -18,14 +18,10 @@ export interface AssetBindingResult {
   diagnostics: string[];
 }
 
-/**
- * Deterministically resolves assets for a section and its component definition.
- * Production rules:
- * - Approved assets always outrank merely generated assets.
- * - Rejected and failed assets are never eligible.
- * - No placeholder/demo imagery is injected here.
- * - Missing mandatory slots are surfaced to the Builder/renderer.
- */
+function rank(asset: GeneratedAsset): number {
+  return asset.status === 'approved' ? 0 : 1;
+}
+
 export function resolveSectionAssets(
   section: SiteSection,
   componentDefinition: ComponentDefinition | undefined,
@@ -41,7 +37,7 @@ export function resolveSectionAssets(
   const contract = getContentContract(section.componentRegistryId);
   const requirements: AssetSlotRequirement[] = [];
 
-  if (contract && contract.assetSlots.length > 0) {
+  if (contract?.assetSlots.length) {
     requirements.push(...contract.assetSlots);
   } else if (componentDefinition?.imageRequirements?.length) {
     for (const req of componentDefinition.imageRequirements) {
@@ -56,15 +52,22 @@ export function resolveSectionAssets(
 
   const eligibleAssets = projectAssets
     .filter((asset) => (asset.status === 'approved' || asset.status === 'generated') && asset.outputUrl)
-    .sort((a, b) => {
-      const rank = (asset: GeneratedAsset) => (asset.status === 'approved' ? 0 : 1);
-      return rank(a) - rank(b);
-    });
+    .sort((a, b) => rank(a) - rank(b));
 
   for (const req of requirements) {
     let matchedAsset: GeneratedAsset | undefined;
 
-    if (section.assetIds?.length) {
+    // Explicit Builder slot assignment always wins if the asset is still eligible.
+    const explicitId = section.assetBindings?.[req.slot];
+    if (explicitId) {
+      matchedAsset = eligibleAssets.find((asset) => asset.id === explicitId);
+      if (!matchedAsset) {
+        diagnostics.push(`Explicit asset binding for slot "${req.slot}" is no longer eligible or has no output URL.`);
+      }
+    }
+
+    // Backwards-compatible flat asset IDs.
+    if (!matchedAsset && section.assetIds?.length) {
       matchedAsset = eligibleAssets.find(
         (asset) =>
           section.assetIds.includes(asset.id) &&
@@ -85,19 +88,13 @@ export function resolveSectionAssets(
 
     if (!matchedAsset) {
       matchedAsset = eligibleAssets.find(
-        (asset) =>
-          asset.sectionId === section.id &&
-          asset.aspectRatio === req.aspectRatio &&
-          !boundAssetIds.includes(asset.id)
+        (asset) => asset.sectionId === section.id && asset.aspectRatio === req.aspectRatio && !boundAssetIds.includes(asset.id)
       );
     }
 
     if (!matchedAsset && pageId) {
       matchedAsset = eligibleAssets.find(
-        (asset) =>
-          asset.pageId === pageId &&
-          asset.aspectRatio === req.aspectRatio &&
-          !boundAssetIds.includes(asset.id)
+        (asset) => asset.pageId === pageId && asset.aspectRatio === req.aspectRatio && !boundAssetIds.includes(asset.id)
       );
     }
 
@@ -126,19 +123,11 @@ export function resolveSectionAssets(
       boundAssetIds.push(matchedAsset.id);
     } else if (req.required) {
       missingMandatorySlots.push(req);
-      diagnostics.push(
-        `Mandatory asset slot "${req.slot}" (${req.aspectRatio}) is missing for section "${section.name}". Generate or assign an approved asset.`
-      );
+      diagnostics.push(`Mandatory asset slot "${req.slot}" (${req.aspectRatio}) is missing for section "${section.name}".`);
     } else {
       missingOptionalSlots.push(req);
     }
   }
 
-  return {
-    assets,
-    boundAssetIds,
-    missingMandatorySlots,
-    missingOptionalSlots,
-    diagnostics,
-  };
+  return { assets, boundAssetIds, missingMandatorySlots, missingOptionalSlots, diagnostics };
 }
