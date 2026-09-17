@@ -10,6 +10,7 @@
     "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit && tsc -p server/tsconfig.json --noEmit",
     "validate:registry": "tsx scripts/validate-registry.ts",
+    "validate:composer": "tsx scripts/validate-composer.ts",
     "preview": "vite preview"
   },
   "dependencies": {
