@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { createEmptyProject, type Project, type SiteSection } from '../shared/project';
 import { SiteExportService } from '../server/services/exportService';
+import { normalizeShopifyThemeZip } from '../server/services/shopifyZipNormalizer';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -80,15 +81,15 @@ async function run() {
   const shopifyValidation = await service.validate(shopify, 'shopify');
   assert(shopifyValidation.valid, `Shopify export unexpectedly invalid: ${JSON.stringify(shopifyValidation.issues)}`);
   const shopifyArtifact = await service.generate(shopify, 'shopify');
-  const shopifyEntries = await entries(shopifyArtifact.buffer);
-  const shopRoot = 'verified-store-shopify-theme/';
-  assert(shopifyEntries.has(`${shopRoot}layout/theme.liquid`), 'Shopify ZIP missing layout/theme.liquid.');
-  assert(shopifyEntries.has(`${shopRoot}templates/index.json`), 'Shopify ZIP missing index.json.');
-  assert(shopifyEntries.has(`${shopRoot}templates/product.json`), 'Shopify ZIP missing native product template.');
-  assert(shopifyEntries.has(`${shopRoot}templates/collection.json`), 'Shopify ZIP missing collection template.');
-  assert(shopifyEntries.has(`${shopRoot}templates/cart.json`), 'Shopify ZIP missing cart template.');
-  assert(shopifyEntries.has(`${shopRoot}sections/main-product.liquid`), 'Shopify ZIP missing native product form section.');
-  assert(shopifyEntries.has(`${shopRoot}sections/natanel-studio-section.liquid`), 'Shopify ZIP missing Natanel Studio section compiler.');
+  const normalizedShopify = await normalizeShopifyThemeZip(shopifyArtifact.buffer);
+  const shopifyEntries = await entries(normalizedShopify);
+  assert(shopifyEntries.has('layout/theme.liquid'), 'Shopify ZIP missing root layout/theme.liquid.');
+  assert(shopifyEntries.has('templates/index.json'), 'Shopify ZIP missing root index.json.');
+  assert(shopifyEntries.has('templates/product.json'), 'Shopify ZIP missing native product template.');
+  assert(shopifyEntries.has('templates/collection.json'), 'Shopify ZIP missing collection template.');
+  assert(shopifyEntries.has('templates/cart.json'), 'Shopify ZIP missing cart template.');
+  assert(shopifyEntries.has('sections/main-product.liquid'), 'Shopify ZIP missing native product form section.');
+  assert(shopifyEntries.has('sections/natanel-studio-section.liquid'), 'Shopify ZIP missing Natanel Studio section compiler.');
 
   const badTarget = await service.validate(shopify, 'react');
   assert(!badTarget.valid, 'Shopify project incorrectly allowed React export.');
@@ -100,8 +101,8 @@ async function run() {
   assert(!blocked.valid, 'Not-ready section incorrectly passed export validation.');
   assert(blocked.issues.some((issue) => issue.code === 'section_not_ready'), 'Not-ready section was not diagnosed.');
 
-  const allText = `${await react.buffer.toString('utf8', 0, Math.min(react.buffer.length, 1000))}`;
-  assert(!allText.includes('GEMINI_API_KEY='), 'Export artifact leaked a Gemini API key declaration.');
+  const binaryPrefix = react.buffer.toString('utf8', 0, Math.min(react.buffer.length, 1000));
+  assert(!binaryPrefix.includes('GEMINI_API_KEY='), 'Export artifact leaked a Gemini API key declaration.');
 
   console.log('Export delivery validation PASSED.');
 }
