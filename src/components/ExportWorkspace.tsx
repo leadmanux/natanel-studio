@@ -1,25 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { Project } from '../../shared/project';
-import type {
-  ExportTarget,
-  ExportValidation,
-  ExportResult,
-} from '../../shared/exportTypes';
-import { validateProjectForExport } from '../../shared/exportValidation';
+import type { ExportResult, ExportTarget, ExportValidation } from '../../shared/exportTypes';
 import {
-  Download,
-  CheckCircle2,
   AlertTriangle,
-  XCircle,
-  ExternalLink,
-  Layers,
+  CheckCircle2,
   Code2,
-  Store,
+  Download,
+  Layers,
   RefreshCw,
-  FileCheck,
-  ShieldCheck,
-  ArrowRight,
-  Sparkles,
+  Store,
+  XCircle,
 } from 'lucide-react';
 
 export interface ExportWorkspaceProps {
@@ -28,425 +18,187 @@ export interface ExportWorkspaceProps {
   onNavigateToBuilder?: (pageId?: string, sectionId?: string) => void;
 }
 
-export function ExportWorkspace({
-  project,
-  onNavigateToBuilder,
-}: ExportWorkspaceProps) {
-  const [selectedTarget, setSelectedTarget] = useState<ExportTarget>('wordpress');
+export function ExportWorkspace({ project, onNavigateToBuilder }: ExportWorkspaceProps) {
+  const [selectedTarget, setSelectedTarget] = useState<Extract<ExportTarget, 'wordpress' | 'react'>>('wordpress');
   const [validation, setValidation] = useState<ExportValidation | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
-  const [exportError, setExportError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const runValidation = useCallback(
-    async (target: ExportTarget = selectedTarget) => {
-      setIsValidating(true);
-      setExportError(null);
-      try {
-        // Try server validation endpoint first
-        const res = await fetch('/api/export/validate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project, target }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setValidation(data.validation);
-        } else {
-          // Fallback to client-side canonical validator
-          setValidation(validateProjectForExport(project, target));
-        }
-      } catch {
-        setValidation(validateProjectForExport(project, target));
-      } finally {
-        setIsValidating(false);
+  const runValidation = useCallback(async (target = selectedTarget) => {
+    setIsValidating(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/export/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project, target }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Validation request failed (${response.status}).`);
       }
-    },
-    [project, selectedTarget]
-  );
+      const payload = await response.json();
+      setValidation(payload.validation);
+    } catch (validationError) {
+      setValidation(null);
+      setError(
+        validationError instanceof Error
+          ? `Canonical server validation is unavailable: ${validationError.message}`
+          : 'Canonical server validation is unavailable.'
+      );
+    } finally {
+      setIsValidating(false);
+    }
+  }, [project, selectedTarget]);
 
   useEffect(() => {
     runValidation(selectedTarget);
-  }, [selectedTarget, runValidation]);
+  }, [runValidation, selectedTarget]);
 
   const handleExport = async () => {
-    if (selectedTarget === 'shopify' || selectedTarget === 'managed') return;
+    if (!validation?.valid) return;
     setIsExporting(true);
-    setExportError(null);
+    setError(null);
     setExportResult(null);
-
     try {
-      const endpoint =
-        selectedTarget === 'wordpress' ? '/api/export/wordpress' : '/api/export/react';
-
-      const res = await fetch(endpoint, {
+      const response = await fetch(`/api/export/${selectedTarget}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project }),
       });
-
-      const data: ExportResult = await res.json();
-
-      if (!res.ok || !data.success) {
-        setExportError(data.message || 'Export process failed. Review validation errors below.');
-        if (data.validation) {
-          setValidation(data.validation);
-        }
-      } else {
-        setExportResult(data);
-        if (data.validation) {
-          setValidation(data.validation);
-        }
-
-        // Trigger browser download if downloadUrl is provided
-        if (data.downloadUrl) {
-          const link = document.createElement('a');
-          link.href = data.downloadUrl;
-          link.download = data.filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
+      const payload: ExportResult = await response.json();
+      if (!response.ok || !payload.success) {
+        if (payload.validation) setValidation(payload.validation);
+        throw new Error(payload.message || `Export failed (${response.status}).`);
       }
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Network error during export.');
+      setExportResult(payload);
+      setValidation(payload.validation);
+      if (payload.downloadUrl) {
+        const anchor = document.createElement('a');
+        anchor.href = payload.downloadUrl;
+        anchor.download = payload.filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'Export failed.');
     } finally {
       setIsExporting(false);
     }
   };
 
-  const isExportDisabled =
-    selectedTarget === 'shopify' ||
-    selectedTarget === 'managed' ||
-    isValidating ||
-    isExporting ||
-    (validation !== null && !validation.valid);
+  const blockingIssues = validation?.issues.filter((issue) => issue.severity === 'error') || [];
+  const warnings = validation?.issues.filter((issue) => issue.severity === 'warning') || [];
+  const exportDisabled = !validation?.valid || isValidating || isExporting;
 
   return (
-    <div className="workspace-card" style={{ padding: '32px' }}>
-      {/* Workspace Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px', borderBottom: '1px solid #242427', paddingBottom: '24px' }}>
+    <div className="workspace-card" style={{ padding: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, alignItems: 'flex-start', marginBottom: 26 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 600 }}>Export Engine V1</h2>
-            <span className="status-pill status-approved">Business Website</span>
-            <span style={{ fontSize: '12px', color: '#888890', background: '#1c1c20', padding: '2px 8px', borderRadius: '4px' }}>
-              {project.business.direction === 'rtl' ? 'Hebrew (RTL)' : 'English (LTR)'}
-            </span>
-          </div>
-          <p style={{ margin: 0, color: '#888890', fontSize: '14px', maxWidth: '650px' }}>
-            Transform your completed Natanel Studio site into a production deliverable. Output includes pure semantic code, design tokens, and local assets with zero runtime studio dependencies.
+          <div style={{ fontSize: 11, letterSpacing: '.08em', color: '#71717a', fontWeight: 700 }}>HANDOFF</div>
+          <h2 style={{ margin: '6px 0 6px', fontSize: 24 }}>Export Engine V1</h2>
+          <p style={{ margin: 0, color: '#8b8b93', maxWidth: 720, lineHeight: 1.55, fontSize: 13 }}>
+            Production exports are validated against the server-canonical component registry before a ZIP can be generated.
           </p>
         </div>
-
         <button
           onClick={() => runValidation(selectedTarget)}
           disabled={isValidating}
           className="secondary-button"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 7 }}
         >
-          <RefreshCw size={14} className={isValidating ? 'spin' : ''} />
-          <span>{isValidating ? 'Validating...' : 'Validate Project'}</span>
+          <RefreshCw size={14} /> {isValidating ? 'Validating…' : 'Validate'}
         </button>
       </div>
 
-      {/* Target Selector Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '36px' }}>
-        {/* WordPress Card */}
-        <div
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(250px,1fr))', gap: 14, marginBottom: 24 }}>
+        <TargetCard
+          selected={selectedTarget === 'wordpress'}
+          title="WordPress Block Theme"
+          description="Recommended client handoff. Site Editor compatible, no Elementor required."
+          icon={<Layers size={21} />}
+          badge="Recommended"
           onClick={() => setSelectedTarget('wordpress')}
-          style={{
-            border: selectedTarget === 'wordpress' ? '2px solid #5b8bf7' : '1px solid #27272b',
-            background: selectedTarget === 'wordpress' ? '#141722' : '#121215',
-            padding: '24px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            position: 'relative',
-            transition: 'border-color 0.15s ease',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(91, 139, 247, 0.12)', display: 'grid', placeItems: 'center', color: '#5b8bf7' }}>
-              <Layers size={22} />
-            </div>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: '#7bca8a', background: 'rgba(123, 202, 138, 0.1)', padding: '3px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Primary / Recommended
-            </span>
-          </div>
-          <h3 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 600 }}>WordPress Block Theme</h3>
-          <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#909096', lineHeight: 1.5 }}>
-            Editable WordPress block theme. No Elementor required.
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            <span style={{ fontSize: '11px', color: '#777780', background: '#1c1c20', padding: '2px 6px', borderRadius: '3px' }}>Full Site Editor</span>
-            <span style={{ fontSize: '11px', color: '#777780', background: '#1c1c20', padding: '2px 6px', borderRadius: '3px' }}>theme.json tokens</span>
-            <span style={{ fontSize: '11px', color: '#777780', background: '#1c1c20', padding: '2px 6px', borderRadius: '3px' }}>rtl.css included</span>
-          </div>
-        </div>
-
-        {/* React Source Card */}
-        <div
+        />
+        <TargetCard
+          selected={selectedTarget === 'react'}
+          title="React Source"
+          description="Standalone Vite/React source with localized assets and no Studio runtime APIs."
+          icon={<Code2 size={21} />}
+          badge="Developer"
           onClick={() => setSelectedTarget('react')}
-          style={{
-            border: selectedTarget === 'react' ? '2px solid #5b8bf7' : '1px solid #27272b',
-            background: selectedTarget === 'react' ? '#141722' : '#121215',
-            padding: '24px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            position: 'relative',
-            transition: 'border-color 0.15s ease',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(91, 139, 247, 0.12)', display: 'grid', placeItems: 'center', color: '#5b8bf7' }}>
-              <Code2 size={22} />
-            </div>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: '#8d8d94', background: 'rgba(255, 255, 255, 0.05)', padding: '3px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Developer Handoff
-            </span>
-          </div>
-          <h3 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 600 }}>React Source (Vite)</h3>
-          <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#909096', lineHeight: 1.5 }}>
-            Standalone developer-ready React/Vite source.
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            <span style={{ fontSize: '11px', color: '#777780', background: '#1c1c20', padding: '2px 6px', borderRadius: '3px' }}>Vite + React 19</span>
-            <span style={{ fontSize: '11px', color: '#777780', background: '#1c1c20', padding: '2px 6px', borderRadius: '3px' }}>TypeScript</span>
-            <span style={{ fontSize: '11px', color: '#777780', background: '#1c1c20', padding: '2px 6px', borderRadius: '3px' }}>Zero studio APIs</span>
-          </div>
-        </div>
-
-        {/* Shopify Card (Disabled / Coming next) */}
-        <div
-          style={{
-            border: '1px solid #1f1f23',
-            background: '#0d0d0f',
-            padding: '24px',
-            borderRadius: '8px',
-            opacity: 0.6,
-            cursor: 'not-allowed',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#18181c', display: 'grid', placeItems: 'center', color: '#686870' }}>
-              <Store size={22} />
-            </div>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: '#e5b95c', background: 'rgba(229, 185, 92, 0.08)', padding: '3px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Coming next
-            </span>
-          </div>
-          <h3 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 600, color: '#9999a0' }}>Shopify Theme</h3>
-          <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#686870', lineHeight: 1.5 }}>
-            Liquid templates and section schemas for Online Store 2.0.
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            <span style={{ fontSize: '11px', color: '#55555c', background: '#161618', padding: '2px 6px', borderRadius: '3px' }}>Scheduled for V2</span>
-          </div>
+        />
+        <div style={{ border: '1px solid #24242a', background: '#101014', borderRadius: 7, padding: 20, opacity: .55 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 13 }}><Store size={21} /><span style={{ fontSize: 10, color: '#e5b95c' }}>COMING NEXT</span></div>
+          <strong>Shopify Theme</strong>
+          <p style={{ margin: '7px 0 0', color: '#777780', fontSize: 12, lineHeight: 1.45 }}>Online Store 2.0 exporter is intentionally disabled until the business export foundation is verified.</p>
         </div>
       </div>
 
-      {/* Validation Status & Issues Banner */}
-      <div style={{ background: '#141417', border: '1px solid #26262a', borderRadius: '8px', padding: '24px', marginBottom: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {validation?.valid ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#7bca8a' }}>
-                <CheckCircle2 size={18} />
-                <span style={{ fontWeight: 600, fontSize: '15px' }}>Pre-Export Validation Passed</span>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e56c6c' }}>
-                <XCircle size={18} />
-                <span style={{ fontWeight: 600, fontSize: '15px' }}>
-                  {validation ? `${validation.errors.length} Issue(s) Blocking Export` : 'Validating project...'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
-            <span style={{ color: validation?.errors.length ? '#e56c6c' : '#7bca8a' }}>
-              Errors: <strong>{validation?.errors.length || 0}</strong>
-            </span>
-            <span style={{ color: validation?.warnings.length ? '#e5b95c' : '#8d8d94' }}>
-              Warnings: <strong>{validation?.warnings.length || 0}</strong>
-            </span>
-          </div>
-        </div>
-
-        {/* Blocking Errors */}
-        {validation?.issues && validation.issues.filter((i) => i.severity === 'error').length > 0 && (
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#e56c6c', marginBottom: '10px' }}>
-              Blocking Requirements
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {validation.issues
-                .filter((i) => i.severity === 'error')
-                .map((issue, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      background: 'rgba(229, 108, 108, 0.05)',
-                      border: '1px solid rgba(229, 108, 108, 0.15)',
-                      padding: '10px 14px',
-                      borderRadius: '6px',
-                      gap: '16px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <XCircle size={15} style={{ color: '#e56c6c', flexShrink: 0 }} />
-                      <span style={{ fontSize: '13px', color: '#f1d0d0' }}>{issue.message}</span>
-                    </div>
-
-                    {(issue.pageId || issue.sectionId) && onNavigateToBuilder && (
-                      <button
-                        onClick={() => onNavigateToBuilder(issue.pageId, issue.sectionId)}
-                        className="secondary-button"
-                        style={{ padding: '4px 10px', fontSize: '11.5px', whiteSpace: 'nowrap', flexShrink: 0 }}
-                      >
-                        <span>Open problem in Builder</span>
-                        <ArrowRight size={12} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* Non-Blocking Warnings */}
-        {validation?.warnings && validation.warnings.length > 0 && (
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#e5b95c', marginBottom: '10px' }}>
-              Recommended Notices (Non-Blocking)
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {validation.warnings.map((warning, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    background: 'rgba(229, 185, 92, 0.04)',
-                    border: '1px solid rgba(229, 185, 92, 0.1)',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                  }}
-                >
-                  <AlertTriangle size={14} style={{ color: '#e5b95c', flexShrink: 0 }} />
-                  <span style={{ fontSize: '12.5px', color: '#dcd4c0' }}>{warning}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* All Green */}
-        {validation?.valid && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#8a8a92', fontSize: '13px' }}>
-            <ShieldCheck size={18} style={{ color: '#7bca8a' }} />
-            <span>
-              All pages, canonical components, approved content, design tokens, and local assets have passed pre-export validation.
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Action / Export Trigger */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
-        <div>
-          <button
-            onClick={handleExport}
-            disabled={isExportDisabled}
-            className="primary-button"
-            style={{ padding: '12px 28px', fontSize: '14px' }}
-          >
-            {isExporting ? (
-              <>
-                <RefreshCw size={16} className="spin" />
-                <span>Generating {selectedTarget === 'wordpress' ? 'WordPress Theme' : 'React Project'} ZIP...</span>
-              </>
-            ) : (
-              <>
-                <Download size={16} />
-                <span>Export {selectedTarget === 'wordpress' ? 'WordPress Block Theme ZIP' : 'React Source ZIP'}</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {exportError && (
-          <div style={{ color: '#e56c6c', fontSize: '13px' }}>
-            {exportError}
-          </div>
-        )}
-      </div>
-
-      {/* Export Result Details Card */}
-      {exportResult && exportResult.success && (
-        <div
-          style={{
-            marginTop: '32px',
-            padding: '24px',
-            background: 'rgba(123, 202, 138, 0.06)',
-            border: '1px solid rgba(123, 202, 138, 0.2)',
-            borderRadius: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <FileCheck size={20} style={{ color: '#7bca8a' }} />
-              <div>
-                <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#f2f2ee' }}>
-                  Deliverable Package Ready
-                </h4>
-                <div style={{ fontSize: '12px', color: '#8a8a92', marginTop: '2px' }}>
-                  Generated at {new Date(exportResult.generatedAt).toLocaleTimeString()} &bull; File: <strong>{exportResult.filename}</strong>
-                </div>
-              </div>
-            </div>
-
-            {exportResult.downloadUrl && (
-              <a
-                href={exportResult.downloadUrl}
-                download={exportResult.filename}
-                className="primary-button"
-                style={{ fontSize: '12.5px', padding: '8px 16px' }}
-              >
-                <Download size={14} />
-                <span>Download Again</span>
-              </a>
-            )}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: '#0e0e11', padding: '16px', borderRadius: '6px', fontSize: '12px' }}>
-            <div>
-              <div style={{ color: '#777780' }}>Pages Packaged</div>
-              <div style={{ fontWeight: 600, color: '#e2e2de', marginTop: '3px' }}>{exportResult.manifest.pages.length} Pages</div>
-            </div>
-            <div>
-              <div style={{ color: '#777780' }}>Components Used</div>
-              <div style={{ fontWeight: 600, color: '#e2e2de', marginTop: '3px' }}>{exportResult.manifest.componentIdsUsed.length} Components</div>
-            </div>
-            <div>
-              <div style={{ color: '#777780' }}>Assets Localized</div>
-              <div style={{ fontWeight: 600, color: '#e2e2de', marginTop: '3px' }}>{exportResult.manifest.assetIdsUsed.length} Assets</div>
-            </div>
-            <div>
-              <div style={{ color: '#777780' }}>Typography</div>
-              <div style={{ fontWeight: 600, color: '#e2e2de', marginTop: '3px' }}>
-                {exportResult.manifest.designTokenSummary.fontDisplay} / {exportResult.manifest.designTokenSummary.fontBody}
-              </div>
-            </div>
-          </div>
+      {error && (
+        <div style={{ marginBottom: 18, border: '1px solid #5c2525', background: '#221313', color: '#f0aaaa', borderRadius: 6, padding: 12, fontSize: 12 }}>
+          {error}
         </div>
       )}
+
+      <div style={{ border: '1px solid #27272c', background: '#121216', borderRadius: 7, padding: 20, marginBottom: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: blockingIssues.length || warnings.length ? 14 : 0 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {validation?.valid ? <CheckCircle2 size={18} color="#4ade80" /> : <XCircle size={18} color="#f87171" />}
+            <strong style={{ fontSize: 13 }}>
+              {isValidating ? 'Validating…' : validation ? (validation.valid ? 'Ready to export' : `${blockingIssues.length} blocking issue${blockingIssues.length === 1 ? '' : 's'}`) : 'Waiting for canonical validation'}
+            </strong>
+          </div>
+          {validation && <span style={{ fontSize: 11, color: '#777780' }}>{warnings.length} warning{warnings.length === 1 ? '' : 's'}</span>}
+        </div>
+
+        {!!blockingIssues.length && (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {blockingIssues.map((issue, index) => (
+              <div key={`${issue.code}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', borderTop: '1px solid #24242a', paddingTop: 9 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, color: '#f3c1c1', fontSize: 12 }}><XCircle size={14} style={{ marginTop: 1, flexShrink: 0 }} />{issue.message}</div>
+                {(issue.pageId || issue.sectionId) && onNavigateToBuilder && (
+                  <button onClick={() => onNavigateToBuilder(issue.pageId, issue.sectionId)} className="secondary-button" style={{ whiteSpace: 'nowrap', fontSize: 10 }}>Open in Builder</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!!warnings.length && (
+          <div style={{ display: 'grid', gap: 7, marginTop: blockingIssues.length ? 14 : 0 }}>
+            {warnings.map((issue, index) => (
+              <div key={`${issue.code}-warning-${index}`} style={{ display: 'flex', gap: 8, color: '#d8bd83', fontSize: 11 }}><AlertTriangle size={13} />{issue.message}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'center', borderTop: '1px solid #24242a', paddingTop: 20 }}>
+        <div style={{ fontSize: 11, color: '#777780' }}>
+          {exportResult?.success ? `Generated ${exportResult.filename}` : 'ZIP generation happens server-side only after validation passes.'}
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={exportDisabled}
+          style={{ border: 0, borderRadius: 5, padding: '10px 15px', background: exportDisabled ? '#2a2a2f' : '#2563eb', color: exportDisabled ? '#66666d' : '#fff', cursor: exportDisabled ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7 }}
+        >
+          <Download size={14} /> {isExporting ? 'Generating…' : `Export ${selectedTarget === 'wordpress' ? 'WordPress' : 'React'} ZIP`}
+        </button>
+      </div>
     </div>
+  );
+}
+
+function TargetCard({ selected, title, description, icon, badge, onClick }: { selected: boolean; title: string; description: string; icon: React.ReactNode; badge: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{ textAlign: 'left', color: '#e4e4e7', border: selected ? '2px solid #4f7de0' : '1px solid #29292f', background: selected ? '#151a25' : '#121216', borderRadius: 7, padding: 20, cursor: 'pointer' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 13 }}><span style={{ color: '#7da6ff' }}>{icon}</span><span style={{ fontSize: 10, color: selected ? '#9dbaff' : '#777780' }}>{badge.toUpperCase()}</span></div>
+      <strong style={{ display: 'block', fontSize: 14 }}>{title}</strong>
+      <span style={{ display: 'block', marginTop: 6, color: '#8a8a92', fontSize: 12, lineHeight: 1.45 }}>{description}</span>
+    </button>
   );
 }

@@ -10,7 +10,6 @@ import { GeminiAssetPlanner } from './server/services/assetPlanner';
 import { GeminiDesignCritic } from './server/services/designCritic';
 import { GeminiSitePlanner } from './server/services/sitePlanner';
 import { GeminiSiteComposer } from './server/services/siteComposer';
-import { demoComponents } from './shared/componentRegistry';
 import { canonicalComponentStore } from './server/services/canonicalComponentStore';
 import { validateProjectForExport } from './shared/exportValidation';
 import { WordPressThemeExporter } from './server/services/export/wordpressExporter';
@@ -244,14 +243,16 @@ async function startServer() {
     }
   });
 
-  // Export Engine V1 Endpoints
-  app.post('/api/export/validate', (req, res) => {
+  // Export Engine V1 Endpoints. Canonical registry status is server-authoritative.
+  app.post('/api/export/validate', async (req, res) => {
     try {
       const { project, target } = req.body;
       if (!project) {
         return res.status(400).json({ error: 'Project payload is required.' });
       }
-      const validation = validateProjectForExport(project, target);
+      await canonicalComponentStore.init();
+      const canonicalComponents = canonicalComponentStore.getAllComponents();
+      const validation = validateProjectForExport(project, target, canonicalComponents);
       return res.json({ validation });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Validation failed.';
@@ -265,7 +266,8 @@ async function startServer() {
       if (!project) {
         return res.status(400).json({ error: 'Project payload is required.' });
       }
-      const exporter = new WordPressThemeExporter();
+      await canonicalComponentStore.init();
+      const exporter = new WordPressThemeExporter(canonicalComponentStore.getAllComponents());
       const result = await exporter.export(project);
       if (!result.success) {
         return res.status(400).json(result);
@@ -283,7 +285,8 @@ async function startServer() {
       if (!project) {
         return res.status(400).json({ error: 'Project payload is required.' });
       }
-      const exporter = new ReactSourceExporter();
+      await canonicalComponentStore.init();
+      const exporter = new ReactSourceExporter(canonicalComponentStore.getAllComponents());
       const result = await exporter.export(project);
       if (!result.success) {
         return res.status(400).json(result);
