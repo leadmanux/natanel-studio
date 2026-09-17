@@ -60,3 +60,14 @@ export function getEligibleComponents(
 ): ComponentDefinition[] {
   return components.filter((component) => evaluateComponentEligibility(component, project).eligible);
 }
+
+export function isComponentEligibleForSection(
+  component: ComponentDefinition,
+  project: Project,
+  expectedCategory?: string
+): boolean {
+  if (expectedCategory && component.category !== expectedCategory) {
+    return false;
+  }
+  return evaluateComponentEligibility(component, project).eligible;
+}

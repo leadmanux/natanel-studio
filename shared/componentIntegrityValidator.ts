@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { ComponentDefinition } from './componentRegistry';
+import { getContentContract } from './contentContracts';
 
 export interface RegistryIntegrityReport {
   valid: boolean;
@@ -65,6 +66,14 @@ export function validateComponentRegistryIntegrity(
         errors.push(
           `Approved component "${comp.id}" has invalid renderImplementationId "${comp.renderImplementationId}" that does not resolve.`
         );
+      }
+
+      // Content Contract check
+      const contract = getContentContract(comp.id);
+      if (!contract) {
+        errors.push(`Approved component "${comp.id}" has no content contract defined.`);
+      } else if (!contract.schema) {
+        errors.push(`Approved component "${comp.id}" content contract is missing a Zod schema.`);
       }
     }
 

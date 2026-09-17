@@ -3,6 +3,8 @@ import type { Project } from '../../shared/project';
 import type { ComponentDefinition } from '../../shared/componentRegistry';
 import type { ComponentSelectionItem, ComponentSelectorService } from '../../src/ai/contracts';
 import { modelConfig } from '../config/models';
+import { normalizeStudioMotionPreset } from '../../shared/motionPresets';
+import { isComponentEligibleForSection } from '../../shared/componentEligibility';
 
 export class GeminiComponentSelector implements ComponentSelectorService {
   private ai: GoogleGenAI | null = null;
@@ -122,7 +124,12 @@ Return a structured JSON list of section selections that form a cohesive page ex
     const parsed = JSON.parse(text) as ComponentSelectionItem[];
     // Filter to ensure all chosen IDs exist in approved candidates
     const validIds = new Set(approvedCandidates.map((c) => c.id));
-    return parsed.filter((item) => validIds.has(item.componentRegistryId));
+    return parsed
+      .filter((item) => validIds.has(item.componentRegistryId))
+      .map((item) => ({
+        ...item,
+        motionPreset: normalizeStudioMotionPreset(item.motionPreset),
+      }));
   }
 
   private selectAlgorithmically(project: Project, approvedCandidates: ComponentDefinition[]): ComponentSelectionItem[] {
@@ -143,7 +150,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
           reason: `Provides restrained, accessible navigation with native ${isRTL ? 'RTL' : 'LTR'} alignment and persistent conversion trigger.`,
           contentRequirements: ['Brand Logo', 'Primary Page Links', 'Direct Action Trigger ("Contact" or "Inquire")'],
           imageRequirements: [],
-          motionPreset: 'fade-slide-down',
+          motionPreset: normalizeStudioMotionPreset('fadeSettle'),
         });
       }
 
@@ -168,7 +175,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
             'Primary Call-to-Action button',
           ],
           imageRequirements: heroComp.imageRequirements.map((r) => `${r.slot} (${r.aspectRatio}): ${r.purpose}`),
-          motionPreset: 'editorial-reveal',
+          motionPreset: normalizeStudioMotionPreset('clipReveal'),
         });
       }
 
@@ -182,7 +189,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
           reason: `Addresses visitor skepticism immediately below the hero with verified certifications, guarantees, and client metrics.`,
           contentRequirements: ['Industry Certifications', 'Verified Outcome Badges', 'Key Guarantee Pillars'],
           imageRequirements: [],
-          motionPreset: 'none',
+          motionPreset: normalizeStudioMotionPreset('none'),
         });
       }
 
@@ -197,7 +204,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
             reason: `Editorial product presentation with direct cart integration and responsive tactile previews.`,
             contentRequirements: ['Product Titles', 'Price & Material Spec', 'Add-to-Bag Action'],
             imageRequirements: ecomComp.imageRequirements.map((r) => `${r.slot} (${r.aspectRatio}): ${r.purpose}`),
-            motionPreset: 'staggered-carousel',
+            motionPreset: normalizeStudioMotionPreset('imageScaleOnScroll'),
           });
         }
       } else {
@@ -210,7 +217,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
             reason: `Demonstrates verified excellence through asymmetric architectural project layouts and panoramic vignettes.`,
             contentRequirements: ['Project Title', 'Client Brief & Result', 'Materials & Methodology Details'],
             imageRequirements: portfolioComp.imageRequirements.map((r) => `${r.slot} (${r.aspectRatio}): ${r.purpose}`),
-            motionPreset: 'smooth-parallax',
+            motionPreset: normalizeStudioMotionPreset('imageScaleOnScroll'),
           });
         }
       }
@@ -225,7 +232,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
           reason: `Presents core capabilities with disciplined typography instead of generic icon boxes.`,
           contentRequirements: ['Capability Titles', 'Detailed Scope Breakdown', 'Expected Timeline & Deliverables'],
           imageRequirements: [],
-          motionPreset: 'subtle-stagger-fade',
+          motionPreset: normalizeStudioMotionPreset('fadeSettle'),
         });
       }
 
@@ -239,7 +246,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
           reason: `Pairs authentic portrait photography with quantitative client results to dissolve remaining hesitation.`,
           contentRequirements: ['Client Name and Executive Title', 'Verified Quote', 'Specific Outcome Metric'],
           imageRequirements: testComp.imageRequirements.map((r) => `${r.slot} (${r.aspectRatio}): ${r.purpose}`),
-          motionPreset: 'fade-settle',
+          motionPreset: normalizeStudioMotionPreset('fadeSettle'),
         });
       }
 
@@ -253,7 +260,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
           reason: `Provides structured client onboarding with clear expectations and zero unnecessary friction.`,
           contentRequirements: ['Project Timeline Selector', 'Scope Selector', 'Direct Contact Fields'],
           imageRequirements: [],
-          motionPreset: 'subtle-focus-lift',
+          motionPreset: normalizeStudioMotionPreset('fadeSettle'),
         });
       }
 
@@ -267,7 +274,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
           reason: `Decisive conclusion to the narrative with stark contrast and unambiguous action trigger.`,
           contentRequirements: ['Concluding Thesis Headline', 'Primary Action Button', 'Secondary Contact Option'],
           imageRequirements: [],
-          motionPreset: 'linear-fade',
+          motionPreset: normalizeStudioMotionPreset('fadeSettle'),
         });
       }
 
@@ -281,7 +288,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
           reason: `Grounds the website with complete navigation directory, copyright, legal links, and business address.`,
           contentRequirements: ['Full Page Sitemap', 'Legal & Privacy Links', 'Business Address & Localized Tax Info'],
           imageRequirements: [],
-          motionPreset: 'none',
+          motionPreset: normalizeStudioMotionPreset('none'),
         });
       }
     }
