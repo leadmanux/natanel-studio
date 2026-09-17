@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { ExportTarget, Project } from '../../shared/project';
 import { SiteExportService } from '../services/exportService';
+import { normalizeShopifyThemeZip } from '../services/shopifyZipNormalizer';
 
 const router = Router();
 const targetSchema = z.enum(['wordpress', 'react', 'shopify', 'managed']);
@@ -30,12 +31,16 @@ router.post('/generate', async (req, res) => {
   }
 
   try {
-    const artifact = await service.generate(project, parsed.data as ExportTarget);
+    const target = parsed.data as ExportTarget;
+    const artifact = await service.generate(project, target);
+    const output = target === 'shopify'
+      ? await normalizeShopifyThemeZip(artifact.buffer)
+      : artifact.buffer;
     res.setHeader('Content-Type', artifact.mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${artifact.filename}"`);
     res.setHeader('X-Natanel-Export-Target', artifact.target);
     res.setHeader('X-Natanel-Export-Warnings', String(artifact.validation.issues.filter((issue) => issue.severity === 'warning').length));
-    return res.send(artifact.buffer);
+    return res.send(output);
   } catch (error) {
     const validation = (error as Error & { validation?: unknown })?.validation;
     if (validation) return res.status(422).json({ error: 'Project is not export-ready.', validation });
