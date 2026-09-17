@@ -34,6 +34,129 @@ export interface BusinessProfile {
   socialLinks: SocialLink[];
 }
 
+export type FactSource = 'user_input' | 'connected_store' | 'imported' | 'verified_external';
+
+export interface FactProvenance {
+  source: FactSource;
+  sourceLabel?: string;
+  verifiedAt?: string;
+}
+
+export interface ServiceFact {
+  name: string;
+  subtitle?: string;
+  description?: string;
+  deliverable?: string;
+  tags?: string[];
+  provenance?: FactProvenance;
+}
+
+export interface ProductFact {
+  id: string;
+  name: string;
+  price?: string;
+  originalPrice?: string;
+  category?: string;
+  description?: string;
+  shippingNote?: string;
+  inStock?: boolean;
+  specs?: Array<{ label: string; value: string }>;
+  provenance?: FactProvenance;
+}
+
+export interface PortfolioProjectFact {
+  title: string;
+  category?: string;
+  location?: string;
+  year?: string;
+  description?: string;
+  metric?: string;
+  challenge?: string;
+  solution?: string;
+  provenance?: FactProvenance;
+}
+
+export interface TestimonialFact {
+  quote: string;
+  author: string;
+  role?: string;
+  company?: string;
+  projectType?: string;
+  verifiedDate?: string;
+  rating?: number;
+  provenance?: FactProvenance;
+}
+
+export interface MetricFact {
+  value: string;
+  label: string;
+  context?: string;
+  provenance?: FactProvenance;
+}
+
+export interface CertificationFact {
+  title: string;
+  code?: string;
+  issuer?: string;
+  provenance?: FactProvenance;
+}
+
+export interface GuaranteeFact {
+  badge?: string;
+  headline?: string;
+  description?: string;
+  points: string[];
+  provenance?: FactProvenance;
+}
+
+export interface ProcessStepFact {
+  phase?: string;
+  title: string;
+  duration?: string;
+  description?: string;
+  provenance?: FactProvenance;
+}
+
+export interface ReviewSummaryFact {
+  score: string;
+  totalReviews: string;
+  ratingSource?: string;
+  platforms?: Array<{ name: string; score: string; count: string }>;
+  provenance?: FactProvenance;
+}
+
+export interface LicenseFact {
+  label: string;
+  code?: string;
+  issuer?: string;
+  provenance?: FactProvenance;
+}
+
+export interface ShippingFact {
+  note?: string;
+  deliveryTime?: string;
+  freeShippingThreshold?: string;
+  provenance?: FactProvenance;
+}
+
+/**
+ * Explicit factual inputs that production composition may rely on.
+ * Gemini must never invent values for these records.
+ */
+export interface ProjectFacts {
+  services: ServiceFact[];
+  products: ProductFact[];
+  portfolioProjects: PortfolioProjectFact[];
+  testimonials: TestimonialFact[];
+  metrics: MetricFact[];
+  certifications: CertificationFact[];
+  licenses: LicenseFact[];
+  guarantees: GuaranteeFact[];
+  process: ProcessStepFact[];
+  reviewSummary?: ReviewSummaryFact;
+  shipping?: ShippingFact;
+}
+
 export type RetrievalStatus = 'success' | 'failed' | 'limited';
 
 export interface ReferenceAnalysis {
@@ -128,6 +251,7 @@ export interface SiteSection {
   imageRequirements?: string[];
   motionPreset?: string;
   contentStatus?: SectionContentStatus;
+  contentApproved?: boolean;
   missingFactualFields?: string[];
   missingAssetRequirements?: string[];
   contentDiagnostics?: string[];
@@ -175,6 +299,7 @@ export interface Project {
   status: ProjectStatus;
   business: BusinessProfile;
   brand: BrandProfile;
+  facts: ProjectFacts;
   strategy: Strategy;
   designSystem: DesignSystem;
   pages: SitePage[];
@@ -209,6 +334,17 @@ export const createEmptyProject = (id: string, type: ProjectType, name = 'Untitl
       brandNotes: '',
       uploadedAssets: [],
       referenceSites: [],
+    },
+    facts: {
+      services: [],
+      products: [],
+      portfolioProjects: [],
+      testimonials: [],
+      metrics: [],
+      certifications: [],
+      licenses: [],
+      guarantees: [],
+      process: [],
     },
     strategy: {
       positioning: '',
