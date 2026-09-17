@@ -1,13 +1,7 @@
 import type { ReactNode } from 'react';
+import type { StudioMotionPreset } from '@shared/studioMotion';
 
-export type StudioMotionPreset =
-  | 'none'
-  | 'fadeReveal'
-  | 'clipReveal'
-  | 'textStagger'
-  | 'imageScaleOnScroll'
-  | 'stackedCards'
-  | 'fadeSettle';
+export type { StudioMotionPreset } from '@shared/studioMotion';
 
 export type StudioIndustryPreset =
   | 'beauty_wellness'

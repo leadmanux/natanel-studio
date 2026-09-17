@@ -22,5 +22,7 @@ jobs:
         run: npm run typecheck
       - name: Validate Component Registry
         run: npm run validate:registry
+      - name: Validate Site Composer
+        run: npm run validate:composer
       - name: Build
         run: npm run build
