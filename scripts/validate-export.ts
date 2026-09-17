@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { createEmptyProject, type Project, type SiteSection } from '../shared/project';
 import { SiteExportService } from '../server/services/exportService';
+import { normalizeReactSourceZip } from '../server/services/reactZipNormalizer';
 import { normalizeShopifyThemeZip } from '../server/services/shopifyZipNormalizer';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -46,13 +47,28 @@ function shopifyProject(): Project {
   project.business.targetAudience = 'Customers';
   project.business.primaryGoal = 'Sell products';
   project.designSystem.artDirection = 'Product editorial';
-  project.pages = [{ id: 'home', name: 'Home', slug: '/', purpose: 'Home', sections: [readySection('footer-minimal-legal-01')] }];
+  const section = readySection('footer-minimal-legal-01');
+  section.assetIds = ['generated-image'];
+  project.pages = [{ id: 'home', name: 'Home', slug: '/', purpose: 'Home', sections: [section] }];
+  project.assets = [{
+    id: 'generated-image',
+    type: 'image',
+    purpose: 'hero',
+    pageId: 'home',
+    sectionId: section.id,
+    prompt: 'test',
+    aspectRatio: '1:1',
+    resolution: '1K',
+    referenceAssets: [],
+    model: 'test',
+    status: 'approved',
+    outputUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  }];
   return project;
 }
 
-async function entries(buffer: Buffer) {
-  const zip = await JSZip.loadAsync(buffer);
-  return new Set(Object.keys(zip.files));
+async function openZip(buffer: Buffer) {
+  return JSZip.loadAsync(buffer);
 }
 
 async function run() {
@@ -63,15 +79,20 @@ async function run() {
   const reactValidation = await service.validate(business, 'react');
   assert(reactValidation.valid, `React export unexpectedly invalid: ${JSON.stringify(reactValidation.issues)}`);
   const react = await service.generate(business, 'react');
-  const reactEntries = await entries(react.buffer);
+  const normalizedReact = await normalizeReactSourceZip(react.buffer);
+  const reactZip = await openZip(normalizedReact);
+  const reactEntries = new Set(Object.keys(reactZip.files));
   const reactRoot = 'verified-business-react/';
   assert(reactEntries.has(`${reactRoot}package.json`), 'React ZIP missing package.json.');
   assert(reactEntries.has(`${reactRoot}src/App.tsx`), 'React ZIP missing App.tsx.');
   assert(reactEntries.has(`${reactRoot}src/project.json`), 'React ZIP missing project.json.');
   assert(Array.from(reactEntries).some((name) => name.includes('StudioSiteRenderer.tsx')), 'React ZIP missing StudioSiteRenderer source.');
+  const exportedCss = await reactZip.file(`${reactRoot}src/site.css`)?.async('string');
+  assert(Boolean(exportedCss && exportedCss.length > 100), 'React ZIP did not preserve Studio responsive CSS.');
 
   const wordpress = await service.generate(business, 'wordpress');
-  const wordpressEntries = await entries(wordpress.buffer);
+  const wordpressZip = await openZip(wordpress.buffer);
+  const wordpressEntries = new Set(Object.keys(wordpressZip.files));
   const wpRoot = 'verified-business-theme/';
   assert(wordpressEntries.has(`${wpRoot}style.css`), 'WordPress ZIP missing style.css.');
   assert(wordpressEntries.has(`${wpRoot}theme.json`), 'WordPress ZIP missing theme.json.');
@@ -82,7 +103,8 @@ async function run() {
   assert(shopifyValidation.valid, `Shopify export unexpectedly invalid: ${JSON.stringify(shopifyValidation.issues)}`);
   const shopifyArtifact = await service.generate(shopify, 'shopify');
   const normalizedShopify = await normalizeShopifyThemeZip(shopifyArtifact.buffer);
-  const shopifyEntries = await entries(normalizedShopify);
+  const shopifyZip = await openZip(normalizedShopify);
+  const shopifyEntries = new Set(Object.keys(shopifyZip.files));
   assert(shopifyEntries.has('layout/theme.liquid'), 'Shopify ZIP missing root layout/theme.liquid.');
   assert(shopifyEntries.has('templates/index.json'), 'Shopify ZIP missing root index.json.');
   assert(shopifyEntries.has('templates/product.json'), 'Shopify ZIP missing native product template.');
@@ -90,6 +112,10 @@ async function run() {
   assert(shopifyEntries.has('templates/cart.json'), 'Shopify ZIP missing cart template.');
   assert(shopifyEntries.has('sections/main-product.liquid'), 'Shopify ZIP missing native product form section.');
   assert(shopifyEntries.has('sections/natanel-studio-section.liquid'), 'Shopify ZIP missing Natanel Studio section compiler.');
+  assert(Array.from(shopifyEntries).some((name) => name.startsWith('assets/natanel-generated-') && name.endsWith('.png')), 'Shopify data image was not packaged as a theme asset.');
+  const homeTemplate = await shopifyZip.file('templates/index.json')?.async('string');
+  assert(Boolean(homeTemplate && !homeTemplate.includes('data:image/')), 'Shopify template still contains an inline data URL.');
+  assert(Boolean(homeTemplate && homeTemplate.includes('image_asset')), 'Shopify template did not reference packaged image asset.');
 
   const badTarget = await service.validate(shopify, 'react');
   assert(!badTarget.valid, 'Shopify project incorrectly allowed React export.');
@@ -101,7 +127,7 @@ async function run() {
   assert(!blocked.valid, 'Not-ready section incorrectly passed export validation.');
   assert(blocked.issues.some((issue) => issue.code === 'section_not_ready'), 'Not-ready section was not diagnosed.');
 
-  const binaryPrefix = react.buffer.toString('utf8', 0, Math.min(react.buffer.length, 1000));
+  const binaryPrefix = normalizedReact.toString('utf8', 0, Math.min(normalizedReact.length, 1000));
   assert(!binaryPrefix.includes('GEMINI_API_KEY='), 'Export artifact leaked a Gemini API key declaration.');
 
   console.log('Export delivery validation PASSED.');
