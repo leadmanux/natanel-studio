@@ -1,407 +1,299 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import JSZip from 'jszip';
 import { createEmptyProject, type Project, type SiteSection } from '../shared/project';
-import { demoComponents } from '../shared/componentRegistry';
+import { demoComponents, type ComponentDefinition } from '../shared/componentRegistry';
+import { STUDIO_MOTION_PRESETS } from '../shared/studioMotion';
 import { validateProjectForExport } from '../shared/exportValidation';
 import { WordPressThemeExporter } from '../server/services/export/wordpressExporter';
 import { ReactSourceExporter } from '../server/services/export/reactExporter';
+import { exportStore } from '../server/services/export/exportStore';
+import { fetchRemoteAsset } from '../server/services/export/exportAssetHelper';
 import type { ExportManifest } from '../shared/exportTypes';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function makeValidHebrewRtlProject(): Project {
-  const project = createEmptyProject('proj-hebrew-valid', 'business_website', 'סטודיו רם');
-  project.business.businessName = 'סטודיו רם ארכיטקטורה';
-  project.business.description = 'תכנון אדריכלי ועיצוב פנים ברמה הגבוהה ביותר בישראל.';
-  project.business.direction = 'rtl';
-  project.business.language = 'Hebrew';
-  project.business.phone = '050-1234567';
-  project.business.email = 'ram@studio-ram.co.il';
-  project.brand.contentDensity = 'balanced';
+function testRegistry(): ComponentDefinition[] {
+  return demoComponents.map((component) => ({ ...component }));
+}
 
-  // Approved local asset
-  project.assets = [
-    {
-      id: 'asset-hero-1',
-      purpose: 'hero',
-      aspectRatio: '4:3',
-      status: 'approved',
-      outputUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    },
-  ];
-
-  // Approved Nav Section
-  const navSection: SiteSection = {
-    id: 'sec-nav',
-    name: 'ניווט עליון',
-    componentRegistryId: 'nav-minimal-dock-01',
-    purpose: 'ניווט ראשי',
-    order: 1,
-    motionPreset: 'fadeSettle',
+function readySection(partial: Omit<SiteSection, 'contentStatus' | 'contentApproved' | 'missingFactualFields' | 'missingAssetRequirements'>): SiteSection {
+  return {
+    ...partial,
     contentStatus: 'ready',
     contentApproved: true,
     missingFactualFields: [],
     missingAssetRequirements: [],
+  };
+}
+
+function makeProject(direction: 'ltr' | 'rtl' = 'ltr'): Project {
+  const project = createEmptyProject(`project-${direction}`, 'business_website', direction === 'rtl' ? 'סטודיו רם' : 'Atelier North');
+  project.business.businessName = direction === 'rtl' ? 'סטודיו רם אדריכלות' : 'Atelier North Design';
+  project.business.description = direction === 'rtl'
+    ? 'סטודיו לאדריכלות ועיצוב פנים המתמחה בחללי מגורים מוקפדים.'
+    : 'An architectural practice creating precise residential spaces with restrained material design.';
+  project.business.direction = direction;
+  project.business.language = direction === 'rtl' ? 'Hebrew' : 'English';
+  project.business.phone = direction === 'rtl' ? '050-1234567' : '+1-555-0199';
+  project.business.email = direction === 'rtl' ? 'studio@example.co.il' : 'hello@example.com';
+  project.designSystem.artDirection = 'Editorial architectural restraint';
+  project.designSystem.typography = 'Plus Jakarta Sans with editorial serif display';
+  project.designSystem.colors = ['#101214', '#1a1d20', '#b89a68'];
+  project.designSystem.borderRadius = '4px subtle';
+  project.designSystem.density = 'editorial';
+
+  project.assets = [{
+    id: 'asset-hero',
+    purpose: 'hero editorial image',
+    aspectRatio: '4:5',
+    status: 'approved',
+    outputUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  }];
+
+  const nav = readySection({
+    id: 'sec-nav',
+    name: 'Navigation',
+    componentRegistryId: 'nav-minimal-dock-01',
+    purpose: 'Primary navigation',
+    order: 1,
+    motionPreset: 'none',
     content: {
-      brandName: 'סטודיו רם',
-      brandTagline: 'אדריכלות וביצוע',
-      links: [{ label: 'פרויקטים', href: '#projects' }, { label: 'אודות', href: '#about' }],
-      ctaLabel: 'יצירת קשר',
+      brandName: project.business.businessName,
+      links: [
+        { label: direction === 'rtl' ? 'ראשי' : 'Home', href: '/' },
+        { label: direction === 'rtl' ? 'אודות' : 'About', href: '/about' },
+      ],
+      ctaLabel: direction === 'rtl' ? 'יצירת קשר' : 'Contact',
+      ctaHref: '/about',
     },
     assetIds: [],
-  };
+  });
 
-  // Approved Hero Section with verified content
-  const heroSection: SiteSection = {
+  const hero = readySection({
     id: 'sec-hero',
-    name: 'מקטע פתיחה',
+    name: 'Hero',
     componentRegistryId: 'hero-editorial-split-01',
-    purpose: 'פתיח מרכזי',
+    purpose: 'Primary introduction',
     order: 2,
-    motionPreset: 'fadeReveal',
-    contentStatus: 'ready',
-    contentApproved: true,
-    missingFactualFields: [],
-    missingAssetRequirements: [],
+    motionPreset: 'clipReveal',
     content: {
-      tagline: 'סטודיו לאדריכלות',
-      headline: 'תכנון מוקפד המגדיר חלל מחדש',
-      subheadline: 'אנו יוצרים סביבות מגורים יוצאות דופן המשלבות דיוק הנדסי וחומריות טבעית.',
-      ctaLabel: 'צפייה בעבודות',
-      secondaryCtaLabel: 'תיאום פגישה',
-      badge: 'מעל 120 פרויקטים בביצוע קפדני',
+      tagline: direction === 'rtl' ? 'אדריכלות מדויקת' : 'Architectural Practice',
+      headline: direction === 'rtl' ? 'תכנון מוקפד שמגדיר חלל מחדש' : 'Precision Architecture for Enduring Living',
+      subheadline: direction === 'rtl' ? 'חללים שקטים עם חומריות טבעית.' : 'Quiet spaces shaped by material clarity.',
+      ctaLabel: direction === 'rtl' ? 'לצפייה בפרויקטים' : 'Explore work',
     },
-    assetBindings: { hero: 'asset-hero-1' },
-    assetIds: ['asset-hero-1'],
-  };
+    assetBindings: { hero: 'asset-hero' },
+    assetIds: ['asset-hero'],
+  });
 
-  // Approved Footer Section
-  const footerSection: SiteSection = {
-    id: 'sec-footer',
-    name: 'כותרת תחתונה',
-    componentRegistryId: 'footer-editorial-architectural-01',
-    purpose: 'סגיר',
+  const cta = readySection({
+    id: 'sec-cta',
+    name: 'Closing CTA',
+    componentRegistryId: 'cta-monumental-statement-01',
+    purpose: 'Closing action',
     order: 3,
     motionPreset: 'fadeSettle',
-    contentStatus: 'ready',
-    contentApproved: true,
-    missingFactualFields: [],
-    missingAssetRequirements: [],
     content: {
-      brandName: 'סטודיו רם',
-      architecturalStatement: 'כל הזכויות שמורות לסטודיו רם 2026',
+      kicker: direction === 'rtl' ? 'מתחילים' : 'Begin',
+      statementHeadline: direction === 'rtl' ? 'בואו נתכנן את החלל הבא' : 'Let us shape the next space',
+      primaryCtaLabel: direction === 'rtl' ? 'תיאום פגישה' : 'Schedule a consultation',
+      primaryCtaHref: '/about',
     },
     assetIds: [],
-  };
+  });
 
-  project.pages = [
-    {
-      id: 'page-home',
-      name: 'דף בית',
-      slug: '/',
-      purpose: 'Home page',
-      sections: [navSection, heroSection, footerSection],
-    },
-  ];
-
-  return project;
-}
-
-function makeValidLtrProject(): Project {
-  const project = createEmptyProject('proj-ltr-valid', 'business_website', 'Atelier North');
-  project.business.businessName = 'Atelier North Design';
-  project.business.description = 'Architectural practice specializing in minimalist residential sanctuaries.';
-  project.business.direction = 'ltr';
-  project.business.language = 'English';
-  project.business.phone = '+1-555-0199';
-  project.business.email = 'inquiries@ateliernorth.com';
-
-  project.assets = [
-    {
-      id: 'asset-hero-ltr',
-      purpose: 'hero',
-      aspectRatio: '4:3',
-      status: 'approved',
-      outputUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    },
-  ];
-
-  const heroSection: SiteSection = {
-    id: 'sec-hero-ltr',
-    name: 'Main Hero',
-    componentRegistryId: 'hero-editorial-split-01',
-    purpose: 'Lead section',
-    order: 1,
-    motionPreset: 'fadeReveal',
-    contentStatus: 'ready',
-    contentApproved: true,
-    missingFactualFields: [],
-    missingAssetRequirements: [],
+  const footer = readySection({
+    id: 'sec-footer',
+    name: 'Footer',
+    componentRegistryId: 'footer-editorial-architectural-01',
+    purpose: 'Global footer',
+    order: 4,
+    motionPreset: 'none',
     content: {
-      tagline: 'Architectural Practice',
-      headline: 'Precision Architecture for Enduring Living',
-      subheadline: 'We orchestrate residential masterworks rooted in material honesty and clean natural light.',
-      ctaLabel: 'Explore Portfolio',
-      secondaryCtaLabel: 'Schedule Consultation',
-      badge: 'Over 85 documented residential commissions',
+      brandName: project.business.businessName,
+      copyright: direction === 'rtl' ? 'כל הזכויות שמורות' : 'All rights reserved',
     },
-    assetBindings: { hero: 'asset-hero-ltr' },
-    assetIds: ['asset-hero-ltr'],
-  };
+    assetIds: [],
+  });
 
-  project.pages = [
-    {
-      id: 'page-home',
-      name: 'Home',
-      slug: '/',
-      purpose: 'Main',
-      sections: [heroSection],
-    },
-  ];
-
+  project.pages = [{ id: 'home', name: direction === 'rtl' ? 'ראשי' : 'Home', slug: '/', purpose: 'Home', sections: [nav, hero, cta, footer] }];
   return project;
 }
 
-async function runExportValidationSuite() {
-  console.log('=== STARTING EXPORT ENGINE V1 VALIDATION TEST SUITE ===');
-
-  // Test 1: Incomplete section blocks export
-  console.log('Test 1: Incomplete section blocks export...');
-  {
-    const project = makeValidHebrewRtlProject();
-    project.pages[0].sections[1].contentStatus = 'needs_input';
-    const validation = validateProjectForExport(project, 'wordpress');
-    assert(!validation.valid, 'Validation should fail when contentStatus is not "ready"');
-    assert(
-      validation.errors.some((e) => e.includes('needs_input') || e.includes('contentStatus')),
-      'Error message should cite contentStatus'
-    );
-  }
-
-  // Test 2: Unapproved content blocks export
-  console.log('Test 2: Unapproved content blocks export...');
-  {
-    const project = makeValidHebrewRtlProject();
-    project.pages[0].sections[1].contentApproved = false;
-    const validation = validateProjectForExport(project, 'wordpress');
-    assert(!validation.valid, 'Validation should fail when contentApproved !== true');
-    assert(
-      validation.errors.some((e) => e.includes('has not been approved')),
-      'Error message should cite unapproved content'
-    );
-  }
-
-  // Test 3: Rejected component blocks export
-  console.log('Test 3: Rejected component blocks export...');
-  {
-    const project = makeValidHebrewRtlProject();
-    // Temporarily mutate component definition
-    const comp = demoComponents.find((c) => c.id === 'hero-editorial-split-01')!;
-    const originalStatus = comp.status;
-    try {
-      (comp as any).status = 'rejected';
-      const validation = validateProjectForExport(project, 'wordpress');
-      assert(!validation.valid, 'Validation should fail for rejected component');
-      assert(
-        validation.errors.some((e) => e.includes('rejected')),
-        'Error message should cite rejected status'
-      );
-    } finally {
-      (comp as any).status = originalStatus;
-    }
-  }
-
-  // Test 4: Missing mandatory asset blocks export
-  console.log('Test 4: Missing mandatory asset blocks export...');
-  {
-    const project = makeValidHebrewRtlProject();
-    project.pages[0].sections[1].missingAssetRequirements = ['hero'];
-    const validation = validateProjectForExport(project, 'wordpress');
-    assert(!validation.valid, 'Validation should fail when missingAssetRequirements is non-empty');
-  }
-
-  // Test 5: Invalid motion preset blocks export
-  console.log('Test 5: Invalid motion blocks export...');
-  {
-    const project = makeValidHebrewRtlProject();
-    (project.pages[0].sections[1] as any).motionPreset = 'hyper-bounce-3000';
-    const validation = validateProjectForExport(project, 'wordpress');
-    assert(!validation.valid, 'Validation should fail for invalid motion preset');
-    assert(
-      validation.errors.some((e) => e.includes('unsupported motion preset')),
-      'Error message should cite unsupported motion'
-    );
-  }
-
-  // Test 6: Valid Hebrew RTL project passes validation
-  console.log('Test 6: Valid Hebrew RTL project passes validation...');
-  {
-    const project = makeValidHebrewRtlProject();
-    const validation = validateProjectForExport(project, 'wordpress');
-    assert(validation.valid, `Valid Hebrew RTL project should pass: ${validation.errors.join('; ')}`);
-    assert(validation.errors.length === 0, 'Should have 0 errors');
-  }
-
-  // Test 7: Valid LTR project passes validation
-  console.log('Test 7: Valid LTR project passes validation...');
-  {
-    const project = makeValidLtrProject();
-    const validation = validateProjectForExport(project, 'react');
-    assert(validation.valid, `Valid LTR project should pass: ${validation.errors.join('; ')}`);
-    assert(validation.errors.length === 0, 'Should have 0 errors');
-  }
-
-  // Test 8: Duplicate slug blocks export
-  console.log('Test 8: Duplicate slug blocks export...');
-  {
-    const project = makeValidHebrewRtlProject();
-    project.pages.push({
-      id: 'page-duplicate',
-      name: 'Duplicate Page',
-      slug: '/',
-      purpose: 'Another home',
-      sections: [project.pages[0].sections[0]],
-    });
-    const validation = validateProjectForExport(project, 'wordpress');
-    assert(!validation.valid, 'Validation should fail on duplicate slug');
-    assert(
-      validation.errors.some((e) => e.includes('Duplicate page slug')),
-      'Error message should cite duplicate page slug'
-    );
-  }
-
-  // Test 9: WordPress ZIP contains required theme files
-  console.log('Test 9: WordPress ZIP contains required theme files...');
-  {
-    const project = makeValidHebrewRtlProject();
-    const exporter = new WordPressThemeExporter();
-    const result = await exporter.export(project);
-    assert(result.success, `WordPress export should succeed: ${result.message}`);
-
-    // Retrieve generated buffer from store
-    const { exportStore } = await import('../server/services/export/exportStore');
-    const stored = exportStore.get(result.downloadId!);
-    assert(stored, 'Stored export buffer must exist in exportStore');
-
-    const zip = await JSZip.loadAsync(stored.buffer);
-    assert(zip.file('style.css'), 'style.css must exist');
-    assert(zip.file('theme.json'), 'theme.json must exist');
-    assert(zip.file('functions.php'), 'functions.php must exist');
-    assert(zip.file('templates/front-page.html'), 'templates/front-page.html must exist');
-    assert(zip.file('templates/index.html'), 'templates/index.html must exist');
-    assert(zip.file('parts/header.html'), 'parts/header.html must exist');
-    assert(zip.file('parts/footer.html'), 'parts/footer.html must exist');
-    assert(zip.file('manifest.json'), 'manifest.json must exist');
-  }
-
-  // Test 10: WordPress output contains no demo/Unsplash content
-  console.log('Test 10: WordPress output contains no demo/Unsplash content...');
-  {
-    const project = makeValidHebrewRtlProject();
-    const exporter = new WordPressThemeExporter();
-    const result = await exporter.export(project);
-    const { exportStore } = await import('../server/services/export/exportStore');
-    const stored = exportStore.get(result.downloadId!);
-    const zip = await JSZip.loadAsync(stored!.buffer);
-
-    for (const [filename, file] of Object.entries(zip.files)) {
-      if (!file.dir && (filename.endsWith('.html') || filename.endsWith('.json') || filename.endsWith('.css') || filename.endsWith('.php'))) {
-        const text = await file.async('text');
-        assert(!text.includes('images.unsplash.com'), `File ${filename} must not contain Unsplash URLs`);
-        assert(!text.includes('demoComponents'), `File ${filename} must not contain demoComponents references`);
-      }
-    }
-  }
-
-  // Test 11: WordPress RTL export contains rtl.css
-  console.log('Test 11: WordPress RTL export contains rtl.css...');
-  {
-    const project = makeValidHebrewRtlProject();
-    const exporter = new WordPressThemeExporter();
-    const result = await exporter.export(project);
-    const { exportStore } = await import('../server/services/export/exportStore');
-    const stored = exportStore.get(result.downloadId!);
-    const zip = await JSZip.loadAsync(stored!.buffer);
-    assert(zip.file('rtl.css'), 'RTL project export must contain rtl.css');
-  }
-
-  // Test 12: React ZIP contains package.json/src and no Gemini/Firebase secrets
-  console.log('Test 12: React ZIP contains package.json/src and no Gemini/Firebase secrets...');
-  {
-    const project = makeValidLtrProject();
-    const exporter = new ReactSourceExporter();
-    const result = await exporter.export(project);
-    assert(result.success, `React export should succeed: ${result.message}`);
-
-    const { exportStore } = await import('../server/services/export/exportStore');
-    const stored = exportStore.get(result.downloadId!);
-    assert(stored, 'Stored React export must exist');
-
-    const zip = await JSZip.loadAsync(stored!.buffer);
-    assert(zip.file('package.json'), 'package.json must exist');
-    assert(zip.file('vite.config.ts'), 'vite.config.ts must exist');
-    assert(zip.file('tsconfig.json'), 'tsconfig.json must exist');
-    assert(zip.file('index.html'), 'index.html must exist');
-    assert(zip.file('README.md'), 'README.md must exist');
-    assert(zip.file('src/main.tsx'), 'src/main.tsx must exist');
-    assert(zip.file('src/App.tsx'), 'src/App.tsx must exist');
-    assert(zip.file('src/siteData.ts'), 'src/siteData.ts must exist');
-    assert(zip.file('src/styles.css'), 'src/styles.css must exist');
-    assert(zip.file('src/components/SectionRenderer.tsx'), 'src/components/SectionRenderer.tsx must exist');
-    assert(zip.file('manifest.json'), 'manifest.json must exist');
-
-    // Security check: No secret keys or firebase configs
-    for (const [filename, file] of Object.entries(zip.files)) {
-      if (!file.dir && (filename.endsWith('.ts') || filename.endsWith('.tsx') || filename.endsWith('.json') || filename.endsWith('.html'))) {
-        const text = await file.async('text');
-        assert(!text.includes('GEMINI_API_KEY'), `${filename} must not contain GEMINI_API_KEY`);
-        assert(!text.includes('FIREBASE_CONFIG'), `${filename} must not contain FIREBASE_CONFIG`);
-      }
-    }
-  }
-
-  // Test 13: Exported content contains supplied business content
-  console.log('Test 13: Exported content contains supplied business content...');
-  {
-    const project = makeValidHebrewRtlProject();
-    const exporter = new WordPressThemeExporter();
-    const result = await exporter.export(project);
-    const { exportStore } = await import('../server/services/export/exportStore');
-    const stored = exportStore.get(result.downloadId!);
-    const zip = await JSZip.loadAsync(stored!.buffer);
-
-    const frontPage = await zip.file('templates/front-page.html')?.async('text');
-    assert(frontPage, 'front-page.html must have text');
-    assert(frontPage.includes('תכנון מוקפד המגדיר חלל מחדש'), 'Hero headline must exist in generated template');
-    assert(frontPage.includes('מעל 120 פרויקטים בביצוע קפדני'), 'Proof badge must exist in generated template');
-  }
-
-  // Test 14: Manifest exists with required fields
-  console.log('Test 14: Manifest exists with required fields...');
-  {
-    const project = makeValidHebrewRtlProject();
-    const exporter = new WordPressThemeExporter();
-    const result = await exporter.export(project);
-    const { exportStore } = await import('../server/services/export/exportStore');
-    const stored = exportStore.get(result.downloadId!);
-    const zip = await JSZip.loadAsync(stored!.buffer);
-
-    const manifestText = await zip.file('manifest.json')?.async('text');
-    assert(manifestText, 'manifest.json must be present');
-    const manifest = JSON.parse(manifestText) as ExportManifest;
-    assert(manifest.studioVersion === '1.0.0', 'Manifest must have studioVersion');
-    assert(manifest.target === 'wordpress', 'Manifest must have target wordpress');
-    assert(manifest.businessName === 'סטודיו רם ארכיטקטורה', 'Manifest must have businessName');
-    assert(manifest.pages.length === 1, 'Manifest must have 1 page');
-    assert(manifest.componentIdsUsed.length > 0, 'Manifest must list used components');
-    assert(manifest.designTokenSummary.themeMode === 'dark', 'Manifest must have design token summary');
-  }
-
-  console.log('=== ALL 14 EXPORT VALIDATION TESTS PASSED SUCCESSFULLY ===');
+async function loadExportZip(result: { downloadId?: string }): Promise<JSZip> {
+  assert(result.downloadId, 'Exporter did not return downloadId.');
+  const stored = exportStore.get(result.downloadId);
+  assert(stored, 'Generated ZIP was not placed in exportStore.');
+  return JSZip.loadAsync(stored.buffer);
 }
 
-runExportValidationSuite().catch((err) => {
-  console.error('Validation test suite failed:', err);
+async function zipText(zip: JSZip, filename: string): Promise<string> {
+  const file = zip.file(filename);
+  assert(file, `ZIP missing ${filename}`);
+  return file.async('text');
+}
+
+async function extractZip(zip: JSZip, directory: string) {
+  for (const [filename, entry] of Object.entries(zip.files)) {
+    const destination = path.join(directory, filename);
+    if (entry.dir) {
+      fs.mkdirSync(destination, { recursive: true });
+      continue;
+    }
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, await entry.async('nodebuffer'));
+  }
+}
+
+async function run() {
+  console.log('--- EXPORT ENGINE INTEGRITY VALIDATION ---');
+  const canonical = testRegistry();
+
+  // Canonical registry is supplied explicitly and controls approval status.
+  const rejectedRegistry = canonical.map((component) =>
+    component.id === 'hero-editorial-split-01' ? { ...component, status: 'rejected' as const } : component
+  );
+  assert(!validateProjectForExport(makeProject(), 'wordpress', rejectedRegistry).valid, 'Rejected canonical component did not block export.');
+  assert(demoComponents.find((component) => component.id === 'hero-editorial-split-01')?.status === 'approved', 'Test mutated static registry metadata.');
+
+  const incomplete = makeProject();
+  incomplete.pages[0].sections[1].contentStatus = 'needs_input';
+  assert(!validateProjectForExport(incomplete, 'wordpress', canonical).valid, 'Incomplete section did not block export.');
+
+  const unapproved = makeProject();
+  unapproved.pages[0].sections[1].contentApproved = false;
+  assert(!validateProjectForExport(unapproved, 'wordpress', canonical).valid, 'Unapproved section did not block export.');
+
+  const missingAsset = makeProject();
+  missingAsset.pages[0].sections[1].assetBindings = {};
+  missingAsset.pages[0].sections[1].assetIds = [];
+  missingAsset.assets = [];
+  assert(!validateProjectForExport(missingAsset, 'wordpress', canonical).valid, 'Missing mandatory asset did not block export.');
+
+  const invalidMotion = makeProject();
+  invalidMotion.pages[0].sections[1].motionPreset = 'cinematicReveal';
+  assert(!validateProjectForExport(invalidMotion, 'react', canonical).valid, 'Invalid motion did not block export.');
+
+  const duplicateSlug = makeProject();
+  duplicateSlug.pages.push({ id: 'duplicate', name: 'Duplicate', slug: '/', purpose: 'Duplicate', sections: [duplicateSlug.pages[0].sections[2]] });
+  assert(!validateProjectForExport(duplicateSlug, 'wordpress', canonical).valid, 'Duplicate slug did not block export.');
+
+  assert(validateProjectForExport(makeProject('ltr'), 'react', canonical).valid, 'Valid LTR project failed validation.');
+  assert(validateProjectForExport(makeProject('rtl'), 'wordpress', canonical).valid, 'Valid RTL project failed validation.');
+
+  // Remote asset fetch is real, MIME checked, and injectable for deterministic tests.
+  const remote = await fetchRemoteAsset('https://assets.example.com/photo.png', {
+    resolveHostname: async () => ['93.184.216.34'],
+    fetchImpl: (async () => new Response(Uint8Array.from([137, 80, 78, 71]), {
+      status: 200,
+      headers: { 'content-type': 'image/png', 'content-length': '4' },
+    })) as typeof fetch,
+  });
+  assert(remote.ext === 'png' && remote.buffer.length === 4, 'HTTPS asset localization did not preserve real bytes.');
+
+  const remoteFailureProject = makeProject();
+  remoteFailureProject.assets[0].outputUrl = 'https://assets.example.com/missing.png';
+  const remoteFailureExporter = new WordPressThemeExporter(canonical, {
+    resolveHostname: async () => ['93.184.216.34'],
+    fetchImpl: (async () => new Response('not found', { status: 404 })) as typeof fetch,
+  });
+  const remoteFailureResult = await remoteFailureExporter.export(remoteFailureProject);
+  assert(!remoteFailureResult.success, 'Failed required remote asset did not fail export.');
+  assert(remoteFailureResult.validation.issues.some((issue) => issue.code === 'asset_localization_failed'), 'Remote asset failure was not reported structurally.');
+
+  // WordPress package integrity.
+  const wpProject = makeProject('rtl');
+  const wpResult = await new WordPressThemeExporter(canonical).export(wpProject);
+  assert(wpResult.success, `WordPress export failed: ${wpResult.message}`);
+  const wpZip = await loadExportZip(wpResult);
+  const requiredWpFiles = [
+    'style.css', 'theme.json', 'functions.php', 'templates/index.html', 'templates/front-page.html',
+    'templates/page.html', 'parts/header.html', 'parts/footer.html', 'assets/css/theme.css',
+    'assets/js/theme.js', 'manifest.json', 'rtl.css',
+  ];
+  requiredWpFiles.forEach((filename) => assert(wpZip.file(filename), `WordPress ZIP missing ${filename}.`));
+  JSON.parse(await zipText(wpZip, 'theme.json'));
+  const wpManifest = JSON.parse(await zipText(wpZip, 'manifest.json')) as ExportManifest;
+  assert(wpManifest.assetIdsUsed.length === 1 && wpManifest.assetIdsUsed[0] === 'asset-hero', 'Manifest asset IDs do not equal actually exported assets.');
+
+  const frontPage = await zipText(wpZip, 'templates/front-page.html');
+  assert((frontPage.match(/template-part \{\"slug\":\"header\"/g) || []).length === 1, 'WordPress front page contains duplicate header template parts.');
+  assert((frontPage.match(/template-part \{\"slug\":\"footer\"/g) || []).length === 1, 'WordPress front page contains duplicate footer template parts.');
+  assert(!frontPage.includes('assets/images/'), 'WordPress template contains page-relative asset URL.');
+
+  const patternFiles = Object.keys(wpZip.files).filter((name) => name.startsWith('patterns/') && name.endsWith('.php'));
+  assert(patternFiles.length >= 3, 'Expected generated WordPress patterns.');
+  let sawThemeUri = false;
+  for (const filename of patternFiles) {
+    const text = await zipText(wpZip, filename);
+    assert(!text.includes('Verified Studio Asset'), `${filename} contains forbidden placeholder artwork.`);
+    assert(!text.includes('images.unsplash.com'), `${filename} contains Unsplash fallback.`);
+    if (text.includes('assets/images/')) {
+      assert(text.includes('get_template_directory_uri()'), `${filename} does not resolve assets through the installed theme directory.`);
+      sawThemeUri = true;
+      for (const match of text.matchAll(/assets\/images\/([a-z0-9.-]+)/g)) {
+        assert(wpZip.file(`assets/images/${match[1]}`), `${filename} references missing localized asset ${match[1]}.`);
+      }
+    }
+  }
+  assert(sawThemeUri, 'No WordPress pattern exercised installed-theme asset resolution.');
+
+  // React package must contain exact canonical component markup and strict routing.
+  const reactProject = makeProject('ltr');
+  const reactResult = await new ReactSourceExporter(canonical).export(reactProject);
+  assert(reactResult.success, `React export failed: ${reactResult.message}`);
+  const reactZip = await loadExportZip(reactResult);
+  ['package.json', 'vite.config.ts', 'tsconfig.json', 'index.html', 'src/main.tsx', 'src/App.tsx', 'src/siteData.ts', 'src/components/SectionFrame.tsx', 'src/styles.css', 'manifest.json'].forEach((filename) => {
+    assert(reactZip.file(filename), `React ZIP missing ${filename}.`);
+  });
+
+  const siteDataSource = await zipText(reactZip, 'src/siteData.ts');
+  assert(siteDataSource.includes('Precision Architecture for Enduring Living'), 'React export lost supplied hero content.');
+  assert(siteDataSource.includes('Let us shape the next space'), 'React export lost supplied CTA content.');
+  assert(!siteDataSource.includes('Generic fallback'), 'React export contains generic substitute renderer output.');
+  assert(!siteDataSource.includes('Verified Studio Asset'), 'React export contains placeholder artwork.');
+  assert(!siteDataSource.includes('images.unsplash.com'), 'React export contains Unsplash fallback.');
+  for (const preset of [...siteDataSource.matchAll(/"motionPreset":\s*"([^"]+)"/g)].map((match) => match[1])) {
+    assert(STUDIO_MOTION_PRESETS.includes(preset as any), `React export emitted non-canonical motion preset ${preset}.`);
+  }
+
+  const appSource = await zipText(reactZip, 'src/App.tsx');
+  assert(appSource.includes('if (!page)'), 'React export does not render a strict Not Found state.');
+  assert(!appSource.includes("||\n    siteData.pages.find"), 'React route silently falls back to another page.');
+  const sharedExportersSource = fs.readFileSync(path.resolve('shared/exporters.ts'), 'utf8');
+  assert(!sharedExportersSource.includes('class WordPressExporter'), 'Duplicate placeholder WordPress exporter still exists.');
+  assert(!sharedExportersSource.includes('class ReactExporter'), 'Duplicate placeholder React exporter still exists.');
+
+  // No secrets, Studio API calls, demo URLs, or placeholder assets inside text files.
+  for (const [filename, entry] of Object.entries(reactZip.files)) {
+    if (entry.dir || !/\.(ts|tsx|json|html|css|md)$/.test(filename)) continue;
+    const text = await entry.async('text');
+    for (const forbidden of ['GEMINI_API_KEY', 'FIREBASE_CONFIG', '/api/ai/', '/api/export/', 'images.unsplash.com', 'Verified Studio Asset']) {
+      assert(!text.includes(forbidden), `${filename} contains forbidden runtime/export string ${forbidden}.`);
+    }
+  }
+
+  // Build the generated React project itself with the already-installed root toolchain.
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'natanel-react-export-'));
+  try {
+    await extractZip(reactZip, tempRoot);
+    fs.symlinkSync(path.resolve('node_modules'), path.join(tempRoot, 'node_modules'), 'dir');
+    execFileSync('npm', ['run', 'build'], { cwd: tempRoot, stdio: 'pipe', env: process.env });
+    assert(fs.existsSync(path.join(tempRoot, 'dist', 'index.html')), 'Generated React project build did not produce dist/index.html.');
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+
+  console.log('Export Engine integrity validation PASSED.');
+}
+
+run().catch((error) => {
+  console.error('Export Engine integrity validation FAILED.');
+  console.error(error instanceof Error ? error.stack || error.message : error);
   process.exit(1);
 });
