@@ -2,43 +2,12 @@ import type { Project, SitePage, SiteSection } from '../../shared/project';
 import type { ComponentDefinition } from '../../shared/componentRegistry';
 import type { SitePlannerService } from '../../src/ai/contracts';
 import { normalizeStudioMotionPreset } from '../../shared/studioMotion';
+import { createStablePageSlug } from '../../shared/pageSlug';
+import { getEligibleComponents } from '../../shared/componentEligibility';
 import { canonicalComponentStore } from './canonicalComponentStore';
 import { GeminiComponentSelector } from './componentSelector';
-import { getEligibleComponents } from './componentEligibility';
 
-const HEBREW_TRANSLITERATION: Record<string, string> = {
-  א: 'a', ב: 'b', ג: 'g', ד: 'd', ה: 'h', ו: 'v', ז: 'z', ח: 'h', ט: 't', י: 'y',
-  כ: 'k', ך: 'k', ל: 'l', מ: 'm', ם: 'm', נ: 'n', ן: 'n', ס: 's', ע: 'a', פ: 'p', ף: 'p',
-  צ: 'ts', ץ: 'ts', ק: 'k', ר: 'r', ש: 'sh', ת: 't',
-};
-
-export function createStablePageSlug(pageName: string, index: number, used: Set<string>): string {
-  if (index === 0 || pageName.trim().toLowerCase() === 'home' || pageName.trim() === 'ראשי') {
-    used.add('/');
-    return '/';
-  }
-
-  const transliterated = Array.from(pageName.trim())
-    .map((char) => HEBREW_TRANSLITERATION[char] ?? char)
-    .join('');
-
-  let base = transliterated
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-  if (!base) base = `page-${index + 1}`;
-
-  let candidate = `/${base}`;
-  let suffix = 2;
-  while (used.has(candidate)) {
-    candidate = `/${base}-${suffix++}`;
-  }
-  used.add(candidate);
-  return candidate;
-}
+export { createStablePageSlug } from '../../shared/pageSlug';
 
 export class GeminiSitePlanner implements SitePlannerService {
   private componentSelector: GeminiComponentSelector;
@@ -61,7 +30,7 @@ export class GeminiSitePlanner implements SitePlannerService {
 
     const selections = await this.componentSelector.selectDetailed(project, eligibleComponents);
 
-    const requiredPages = project.strategy.requiredPages && project.strategy.requiredPages.length > 0
+    const requiredPages = project.strategy.requiredPages?.length
       ? project.strategy.requiredPages
       : project.projectType === 'shopify'
         ? ['Home', 'Catalog', 'Product', 'About']
@@ -71,11 +40,10 @@ export class GeminiSitePlanner implements SitePlannerService {
     const usedSlugs = new Set<string>();
 
     requiredPages.forEach((pageName, index) => {
-      const slug = createStablePageSlug(pageName, index, usedSlugs);
       pagesMap.set(pageName.toLowerCase(), {
         id: `page_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 6)}`,
         name: pageName,
-        slug,
+        slug: createStablePageSlug(pageName, index, usedSlugs),
         purpose: `${pageName} experience for ${project.business.businessName || 'the project'}.`,
         sections: [],
       });
@@ -88,22 +56,18 @@ export class GeminiSitePlanner implements SitePlannerService {
       if (!eligibleIds.has(item.componentRegistryId)) continue;
 
       const pageKey = (item.page || 'Home').toLowerCase();
-      let targetPage = pagesMap.get(pageKey);
-
-      if (!targetPage) {
-        targetPage = pagesMap.get('home') || Array.from(pagesMap.values())[0];
-      }
-
+      const targetPage = pagesMap.get(pageKey) || pagesMap.get('home') || Array.from(pagesMap.values())[0];
       if (!targetPage) continue;
 
       globalSectionCount++;
-      const newSection: SiteSection = {
+      const section: SiteSection = {
         id: `sec_${Date.now()}_${globalSectionCount}_${Math.random().toString(36).substring(2, 6)}`,
         name: item.sectionPurpose || `Section ${targetPage.sections.length + 1}`,
         componentRegistryId: item.componentRegistryId,
         purpose: item.sectionPurpose,
         content: {},
         assetIds: [],
+        assetBindings: {},
         order: targetPage.sections.length + 1,
         reason: item.reason,
         contentRequirements: item.contentRequirements,
@@ -112,8 +76,7 @@ export class GeminiSitePlanner implements SitePlannerService {
         contentStatus: 'needs_input',
         contentApproved: false,
       };
-
-      targetPage.sections.push(newSection);
+      targetPage.sections.push(section);
     }
 
     for (const page of pagesMap.values()) {
@@ -135,6 +98,7 @@ export class GeminiSitePlanner implements SitePlannerService {
           purpose: 'Global site navigation and primary action anchor',
           content: {},
           assetIds: [],
+          assetBindings: {},
           order: 1,
           motionPreset: 'fadeSettle',
           contentStatus: 'needs_input',
@@ -154,6 +118,7 @@ export class GeminiSitePlanner implements SitePlannerService {
           purpose: 'Site directory, legal information, and verified business contact information',
           content: {},
           assetIds: [],
+          assetBindings: {},
           order: page.sections.length + 1,
           motionPreset: 'fadeSettle',
           contentStatus: 'needs_input',
