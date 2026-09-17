@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { Project, SitePage, SiteSection } from '../../../shared/project';
 import type { ComponentDefinition } from '../../../shared/componentRegistry';
 import { resolveSectionAssets } from '../../../shared/assetBinding';
+import { adaptContentForStudioImplementation } from '../../../shared/implementationContent';
 import { normalizeStudioMotionPreset } from '../../../shared/studioMotion';
 import {
   getStudioComponent,
@@ -86,11 +87,16 @@ export function renderExactExportSection(
   });
   const Component = getStudioComponent(component.id);
   const motionPreset = normalizeStudioMotionPreset(section.motionPreset);
+  const renderContent = adaptContentForStudioImplementation(
+    section.componentRegistryId,
+    section.content || {},
+    project
+  );
 
   try {
     const html = renderToStaticMarkup(
       React.createElement(Component, {
-        content: section.content,
+        content: renderContent,
         contentMode: 'production',
         assets: localizedAssets,
         designTokens: compiledTokens.tokens,
