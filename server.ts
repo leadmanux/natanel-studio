@@ -10,8 +10,8 @@ import { GeminiAssetPlanner } from './server/services/assetPlanner';
 import { GeminiDesignCritic } from './server/services/designCritic';
 import { GeminiSitePlanner } from './server/services/sitePlanner';
 import { GeminiSiteComposer } from './server/services/siteComposer';
-import { demoComponents } from './shared/componentRegistry';
 import { canonicalComponentStore } from './server/services/canonicalComponentStore';
+import { exportRouter } from './server/routes/exportRoutes';
 
 async function startServer() {
   const app = express();
@@ -19,10 +19,11 @@ async function startServer() {
 
   app.use(express.json({ limit: '20mb' }));
 
-  // API routes
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, service: 'natanel-studio', timestamp: new Date().toISOString() });
   });
+
+  app.use('/api/export', exportRouter);
 
   const imageRequestSchema = z.object({
     prompt: z.string().min(5),
@@ -48,13 +49,10 @@ async function startServer() {
     }
   });
 
-  // Art Director: Generates 3 distinct design concepts
   app.post('/api/ai/art-directions', async (req, res) => {
     try {
       const { project } = req.body;
-      if (!project) {
-        return res.status(400).json({ error: 'Project payload is required.' });
-      }
+      if (!project) return res.status(400).json({ error: 'Project payload is required.' });
       const artDirector = new GeminiArtDirector();
       const directions = await artDirector.proposeDirections(project);
       return res.json({ directions });
@@ -64,13 +62,10 @@ async function startServer() {
     }
   });
 
-  // Reference Website Analysis
   app.post('/api/ai/analyze-reference', async (req, res) => {
     try {
       const { url, project, screenshots } = req.body;
-      if (!url) {
-        return res.status(400).json({ error: 'Reference URL is required.' });
-      }
+      if (!url) return res.status(400).json({ error: 'Reference URL is required.' });
       const analyzer = new GeminiReferenceAnalyzer();
       const analysis = await analyzer.analyze(url, project, screenshots);
       return res.json({ analysis });
@@ -80,7 +75,6 @@ async function startServer() {
     }
   });
 
-  // Canonical Component Registry Endpoints
   app.get('/api/components', (_req, res) => {
     try {
       const components = canonicalComponentStore.getAllComponents();
@@ -121,29 +115,19 @@ async function startServer() {
     }
   });
 
-  // Component Selection Engine
   app.post('/api/ai/select-components', async (req, res) => {
     try {
       const { project, candidates } = req.body;
-      if (!project) {
-        return res.status(400).json({ error: 'Project payload is required.' });
-      }
+      if (!project) return res.status(400).json({ error: 'Project payload is required.' });
 
-      // Canonical server registry is authoritative.
-      // AI selection may use ONLY canonicalComponentStore.getApprovedComponents().
       const canonicalApproved = canonicalComponentStore.getApprovedComponents();
       const approvedMap = new Map(canonicalApproved.map((c) => [c.id, c]));
-
       let eligibleComponents: typeof canonicalApproved;
 
-      // If client supplied candidate IDs, intersect strictly with canonical approved registry IDs
-      // and retrieve component metadata from canonical server registry.
-      // Unknown IDs and non-approved IDs are rejected/ignored.
       if (Array.isArray(candidates) && candidates.length > 0) {
         const requestedIds = candidates
           .map((c: any) => (typeof c === 'string' ? c : c?.id))
           .filter(Boolean);
-
         eligibleComponents = requestedIds
           .map((id: string) => approvedMap.get(id))
           .filter((c): c is (typeof canonicalApproved)[number] => c !== undefined);
@@ -160,13 +144,10 @@ async function startServer() {
     }
   });
 
-  // Asset Planner: Website Asset Manifest
   app.post('/api/ai/plan-assets', async (req, res) => {
     try {
       const { project } = req.body;
-      if (!project) {
-        return res.status(400).json({ error: 'Project payload is required.' });
-      }
+      if (!project) return res.status(400).json({ error: 'Project payload is required.' });
       const planner = new GeminiAssetPlanner();
       const assets = await planner.plan(project);
       return res.json({ assets });
@@ -176,13 +157,10 @@ async function startServer() {
     }
   });
 
-  // Design Critic: Design Quality Review
   app.post('/api/ai/critic', async (req, res) => {
     try {
       const { project, screenshots } = req.body;
-      if (!project) {
-        return res.status(400).json({ error: 'Project payload is required.' });
-      }
+      if (!project) return res.status(400).json({ error: 'Project payload is required.' });
       const critic = new GeminiDesignCritic();
       const report = await critic.review(project, screenshots);
       return res.json({ report });
@@ -192,13 +170,10 @@ async function startServer() {
     }
   });
 
-  // Site Planner: Multi-page structure planning with approved components
   app.post('/api/ai/plan-site', async (req, res) => {
     try {
       const { project } = req.body;
-      if (!project) {
-        return res.status(400).json({ error: 'Project payload is required.' });
-      }
+      if (!project) return res.status(400).json({ error: 'Project payload is required.' });
       const planner = new GeminiSitePlanner();
       const pages = await planner.plan(project);
       return res.json({ pages });
@@ -208,13 +183,10 @@ async function startServer() {
     }
   });
 
-  // Site Composer: Production-ready truthful content composition
   app.post('/api/ai/compose-site', async (req, res) => {
     try {
       const { project } = req.body;
-      if (!project) {
-        return res.status(400).json({ error: 'Project payload is required.' });
-      }
+      if (!project) return res.status(400).json({ error: 'Project payload is required.' });
       const composer = new GeminiSiteComposer();
       const result = await composer.compose(project);
       return res.json(result);
@@ -224,7 +196,6 @@ async function startServer() {
     }
   });
 
-  // Section Composer: Single section regeneration
   app.post('/api/ai/compose-section', async (req, res) => {
     try {
       const { project, pageId, sectionId } = req.body;
@@ -240,7 +211,6 @@ async function startServer() {
     }
   });
 
-  // Vite middleware in dev, static files in production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
