@@ -3,8 +3,7 @@ import type { Project } from '../../shared/project';
 import type { ComponentDefinition } from '../../shared/componentRegistry';
 import type { ComponentSelectionItem, ComponentSelectorService } from '../../src/ai/contracts';
 import { modelConfig } from '../config/models';
-import { normalizeStudioMotionPreset } from '../../shared/motionPresets';
-import { isComponentEligibleForSection } from '../../shared/componentEligibility';
+import { normalizeStudioMotionPreset } from '../../shared/studioMotion';
 
 export class GeminiComponentSelector implements ComponentSelectorService {
   private ai: GoogleGenAI | null = null;
