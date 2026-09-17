@@ -12,6 +12,10 @@ import { GeminiSitePlanner } from './server/services/sitePlanner';
 import { GeminiSiteComposer } from './server/services/siteComposer';
 import { demoComponents } from './shared/componentRegistry';
 import { canonicalComponentStore } from './server/services/canonicalComponentStore';
+import { validateProjectForExport } from './shared/exportValidation';
+import { WordPressThemeExporter } from './server/services/export/wordpressExporter';
+import { ReactSourceExporter } from './server/services/export/reactExporter';
+import { exportStore } from './server/services/export/exportStore';
 
 async function startServer() {
   const app = express();
@@ -237,6 +241,73 @@ async function startServer() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to compose section.';
       return res.status(500).json({ error: message });
+    }
+  });
+
+  // Export Engine V1 Endpoints
+  app.post('/api/export/validate', (req, res) => {
+    try {
+      const { project, target } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const validation = validateProjectForExport(project, target);
+      return res.json({ validation });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Validation failed.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/export/wordpress', async (req, res) => {
+    try {
+      const { project } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const exporter = new WordPressThemeExporter();
+      const result = await exporter.export(project);
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'WordPress export failed.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/export/react', async (req, res) => {
+    try {
+      const { project } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const exporter = new ReactSourceExporter();
+      const result = await exporter.export(project);
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'React export failed.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  app.get('/api/export/download/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      const item = exportStore.get(id);
+      if (!item) {
+        return res.status(404).send('Export artifact not found or expired. Please regenerate the export.');
+      }
+      res.setHeader('Content-Type', item.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${item.filename}"`);
+      return res.send(item.buffer);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Download failed.';
+      return res.status(500).send(message);
     }
   });
 

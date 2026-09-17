@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Blocks,
-  Box,
   ChevronRight,
   FolderKanban,
   Image as ImageIcon,
   MonitorSmartphone,
-  PackageOpen,
   Plus,
   Settings,
   ShoppingBag,
@@ -21,7 +19,6 @@ import {
 } from 'lucide-react';
 import { demoComponents } from '@shared/componentRegistry';
 import { createEmptyProject, type Project, type ProjectType } from '@shared/project';
-import { exporters } from '@shared/exporters';
 import { projectRepository } from './data/projectRepository';
 import { BriefEditor } from './components/BriefEditor';
 import { DesignWorkspace } from './components/DesignWorkspace';
@@ -32,6 +29,7 @@ import { NewProjectModal } from './components/NewProjectModal';
 import { BuildWorkspace } from './components/BuildWorkspace';
 import { SitePreviewView } from './components/SitePreviewView';
 import { StandalonePreviewView } from './components/StandalonePreviewView';
+import { ExportWorkspace } from './components/ExportWorkspace';
 
 const navItems = [
   { label: 'Projects', icon: FolderKanban },
@@ -96,8 +94,6 @@ export default function App() {
     };
     handleUpdateProject(updated);
   };
-
-  const availableExporters = exporters.filter((exporter) => exporter.canExport(project));
 
   // Determine pipeline steps completion
   const pipelineSteps = useMemo(() => {
@@ -407,48 +403,11 @@ export default function App() {
 
                 {/* 8. HANDOFF TAB */}
                 {activeTab === 'Handoff' && (
-                  <div className="handoff-view">
-                    <div className="section-intro">
-                      <div>
-                        <span className="eyebrow">STAGE 07 / EXPORT</span>
-                        <h2>Choose how this site leaves the studio.</h2>
-                        <p className="section-description">
-                          Target-specific compiler preserves your platform-neutral design system and translates it into clean,
-                          production-ready code without unnecessary runtime dependencies.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="handoff-grid">
-                      {availableExporters.map((exporter) => (
-                        <article className="handoff-card" key={exporter.id}>
-                          <div className="handoff-icon">
-                            {exporter.id === 'shopify' ? (
-                              <ShoppingBag />
-                            ) : exporter.id === 'react' ? (
-                              <Box />
-                            ) : (
-                              <PackageOpen />
-                            )}
-                          </div>
-                          <div>
-                            <h3>{exporter.name}</h3>
-                            <p>
-                              {exporter.id === 'wordpress' &&
-                                'Installable WordPress theme with custom Gutenberg blocks for client-owned hosting.'}
-                              {exporter.id === 'react' &&
-                                'Source TypeScript + React + Tailwind project ready for GitHub, Vercel, or custom hosting.'}
-                              {exporter.id === 'managed' &&
-                                'Agency-managed high-performance deployment and maintenance workflow.'}
-                              {exporter.id === 'shopify' &&
-                                'Online Store 2.0 validated Shopify theme ZIP with Liquid templates and section schemas.'}
-                            </p>
-                          </div>
-                          <ChevronRight size={19} />
-                        </article>
-                      ))}
-                    </div>
-                  </div>
+                  <ExportWorkspace
+                    project={project}
+                    onUpdateProject={handleUpdateProject}
+                    onNavigateToBuilder={(_pageId, _sectionId) => setActiveTab('Build')}
+                  />
                 )}
               </div>
 

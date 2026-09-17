@@ -5,18 +5,23 @@ import { ArrowRight, ArrowLeft, ShieldCheck } from 'lucide-react';
 
 export interface EditorialHeroContent {
   eyebrow?: string;
+  tagline?: string;
   headline?: string;
   description?: string;
+  subheadline?: string;
   primaryCta?: string;
+  ctaLabel?: string;
   secondaryCta?: string;
+  secondaryCtaLabel?: string;
   proofBadge?: string;
+  badge?: string;
 }
 
 export function EditorialSplitHero(props: StudioComponentProps<EditorialHeroContent>) {
   const isRtl = props.direction === 'rtl';
   const isProduction = props.contentMode === 'production';
 
-  const defaultContent: Required<EditorialHeroContent> = isRtl
+  const defaultContent: EditorialHeroContent = isRtl
     ? {
         eyebrow: 'סטודיו לארכיטקטורה וחללים יוקרתיים',
         headline: 'דיוק אדריכלי המעצב מציאות חדשה.',
@@ -36,12 +41,12 @@ export function EditorialSplitHero(props: StudioComponentProps<EditorialHeroCont
 
   const content: EditorialHeroContent = isProduction
     ? {
-        eyebrow: props.content?.eyebrow || '',
+        eyebrow: props.content?.eyebrow || props.content?.tagline || '',
         headline: props.content?.headline || '',
-        description: props.content?.description || '',
-        primaryCta: props.content?.primaryCta || '',
-        secondaryCta: props.content?.secondaryCta || '',
-        proofBadge: props.content?.proofBadge || '',
+        description: props.content?.description || props.content?.subheadline || '',
+        primaryCta: props.content?.primaryCta || props.content?.ctaLabel || '',
+        secondaryCta: props.content?.secondaryCta || props.content?.secondaryCtaLabel || '',
+        proofBadge: props.content?.proofBadge || props.content?.badge || '',
       }
     : { ...defaultContent, ...props.content };
 

@@ -24,5 +24,7 @@ jobs:
         run: npm run validate:registry
       - name: Validate Site Composer
         run: npm run validate:composer
+      - name: Validate Export Engine
+        run: npm run validate:export
       - name: Build
         run: npm run build
