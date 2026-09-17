@@ -1,602 +1,283 @@
 import JSZip from 'jszip';
-import type { Project, SitePage, SiteSection } from '../../../shared/project';
-import { demoComponents, type ComponentDefinition } from '../../../shared/componentRegistry';
-import { resolveSectionAssets } from '../../../shared/assetBinding';
+import type { Project } from '../../../shared/project';
+import type { ComponentDefinition } from '../../../shared/componentRegistry';
+import type { ExportResult, ExportValidation, SiteExporter } from '../../../shared/exportTypes';
 import { validateProjectForExport } from '../../../shared/exportValidation';
 import { compileProjectDesignTokens } from '../../../src/studio-components/designTokenCompiler';
-import { collectAndProcessExportAssets } from './exportAssetHelper';
-import type {
-  ExportResult,
-  ExportManifest,
-  SiteExporter,
-} from '../../../shared/exportTypes';
-
-const componentLookup = new Map<string, ComponentDefinition>(
-  demoComponents.map((c) => [c.id, c])
-);
+import {
+  collectAndProcessExportAssets,
+  ExportAssetError,
+  type ExportAssetFetchOptions,
+} from './exportAssetHelper';
+import { createExportManifest } from './exportManifest';
+import {
+  ExportSectionRenderError,
+  renderExactExportSection,
+} from './renderExportSection';
+import { exportStore } from './exportStore';
 
 export class ReactSourceExporter implements SiteExporter {
   id = 'react' as const;
   name = 'React Source (Vite)';
+
+  constructor(
+    private canonicalComponents: ComponentDefinition[],
+    private assetFetchOptions: ExportAssetFetchOptions = {}
+  ) {}
 
   canExport(project: Project): boolean {
     return project.projectType === 'business_website';
   }
 
   async validate(project: Project) {
-    return validateProjectForExport(project, 'react');
+    return validateProjectForExport(project, 'react', this.canonicalComponents);
   }
 
   async export(project: Project): Promise<ExportResult> {
-    const validation = await this.validate(project);
+    let validation = await this.validate(project);
     const generatedAt = new Date().toISOString();
-
-    const safeSlug = (project.business.businessName || project.name || 'natanel-studio-site')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'website';
+    const safeSlug = sanitizeSlug(project.business.businessName || project.name || 'website');
     const filename = `${safeSlug}-react-source.zip`;
-
-    const manifest: ExportManifest = {
-      studioVersion: '1.0.0',
-      generatedAt,
-      projectId: project.id,
-      projectName: project.name,
-      businessName: project.business.businessName,
-      target: 'react',
-      direction: project.business.direction,
-      language: project.business.language || 'English',
-      pages: (project.pages || []).map((p) => ({
-        id: p.id,
-        name: p.name,
-        slug: p.slug,
-        sectionCount: (p.sections || []).length,
-        sections: (p.sections || []).map((s) => ({
-          id: s.id,
-          name: s.name,
-          componentRegistryId: s.componentRegistryId,
-        })),
-      })),
-      componentIdsUsed: Array.from(
-        new Set(project.pages.flatMap((p) => p.sections.map((s) => s.componentRegistryId)))
-      ),
-      assetIdsUsed: Array.from(
-        new Set(project.pages.flatMap((p) => p.sections.flatMap((s) => s.assetIds || [])))
-      ),
-      designTokenSummary: {
-        themeMode: 'dark',
-        primaryColor: project.designSystem?.colors?.[0] || '#111113',
-        fontDisplay: project.designSystem?.typography || 'Editorial Serif',
-        fontBody: 'Inter',
-        density: project.brand.contentDensity || 'balanced',
-      },
-    };
-
-    if (!validation.valid) {
-      return {
-        success: false,
-        target: 'react',
-        filename,
-        mimeType: 'application/zip',
-        generatedAt,
-        validation,
-        manifest,
-        message: `Validation failed with ${validation.errors.length} error(s).`,
-      };
-    }
-
-    // Collect and localize assets
-    const { assets: processedAssets, urlToFilenameMap } = await collectAndProcessExportAssets(project);
-
-    // Compile design tokens
     const compiledTokens = compileProjectDesignTokens(project.designSystem, {
       industry: project.business.industry,
       themeMode: 'dark',
-      density: project.brand.contentDensity,
+      density: project.brand.contentDensity || project.designSystem.density,
       direction: project.business.direction,
     });
+    let manifest = createExportManifest(project, 'react', generatedAt, [], compiledTokens.tokens, 'dark');
 
-    const isRtl = project.business.direction === 'rtl';
-    const siteTitle = project.business.businessName || project.name || 'Website';
-
-    const zip = new JSZip();
-
-    // 1. package.json
-    const packageJson = {
-      name: safeSlug,
-      private: true,
-      version: '1.0.0',
-      type: 'module',
-      scripts: {
-        dev: 'vite',
-        build: 'tsc && vite build',
-        preview: 'vite preview',
-      },
-      dependencies: {
-        'lucide-react': '^0.468.0',
-        motion: '^13.4.0',
-        react: '^19.1.0',
-        'react-dom': '^19.1.0',
-      },
-      devDependencies: {
-        '@types/node': '^24.0.0',
-        '@types/react': '^19.1.0',
-        '@types/react-dom': '^19.1.0',
-        '@vitejs/plugin-react': '^5.0.0',
-        typescript: '^5.9.0',
-        vite: '^7.0.0',
-      },
-    };
-    zip.file('package.json', JSON.stringify(packageJson, null, 2));
-
-    // 2. vite.config.ts
-    const viteConfig = `import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-
-export default defineConfig({
-  plugins: [react()],
-});
-`;
-    zip.file('vite.config.ts', viteConfig);
-
-    // 3. tsconfig.json
-    const tsConfig = {
-      compilerOptions: {
-        target: 'ES2022',
-        useDefineForClassFields: true,
-        lib: ['ES2022', 'DOM', 'DOM.Iterable'],
-        module: 'ESNext',
-        skipLibCheck: true,
-        moduleResolution: 'bundler',
-        allowImportingTsExtensions: false,
-        resolveJsonModule: true,
-        isolatedModules: true,
-        moduleDetection: 'force',
-        noEmit: true,
-        jsx: 'react-jsx',
-        strict: true,
-        noUnusedLocals: false,
-        noUnusedParameters: false,
-        noFallthroughCasesInSwitch: true,
-      },
-      include: ['src'],
-    };
-    zip.file('tsconfig.json', JSON.stringify(tsConfig, null, 2));
-
-    // 4. index.html
-    const indexHtml = `<!DOCTYPE html>
-<html lang="${isRtl ? 'he' : 'en'}" dir="${project.business.direction}">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${escapeHtml(siteTitle)}</title>
-    <meta name="description" content="${escapeHtml(project.business.description || '')}" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
-`;
-    zip.file('index.html', indexHtml);
-
-    // 5. README.md
-    const readmeMd = `# ${siteTitle}
-
-This is a production-ready, standalone React website exported from **Natanel Studio**.
-Zero runtime dependencies on Natanel Studio APIs, Firebase, or external AI services.
-
-## Project Structure
-- \`src/siteData.ts\`: Canonical structured content, pages, sections, and design tokens
-- \`src/App.tsx\`: Main application with client-side routing and layout
-- \`src/components/SectionRenderer.tsx\`: Canonical section rendering components
-- \`public/assets/images/\`: Localized, approved image assets
-
-## Getting Started
-
-1. **Install dependencies:**
-\`\`\`bash
-npm install
-\`\`\`
-
-2. **Run development server:**
-\`\`\`bash
-npm run dev
-\`\`\`
-
-3. **Build for production:**
-\`\`\`bash
-npm run build
-\`\`\`
-
-The production build will be located in the \`dist/\` directory, ready to deploy to Vercel, Netlify, Cloudflare Pages, or any static host.
-`;
-    zip.file('README.md', readmeMd);
-
-    // 6. public/assets/images/
-    const imagesFolder = zip.folder('public/assets/images');
-    for (const asset of processedAssets) {
-      imagesFolder?.file(asset.filename, asset.buffer);
+    if (!validation.valid) {
+      return failedResult(filename, generatedAt, validation, manifest, 'React export validation failed.');
     }
 
-    // 7. src/styles.css
-    const cssVarsString = Object.entries(compiledTokens.cssVariables)
-      .map(([key, val]) => `  ${key}: ${val};`)
-      .join('\n');
+    try {
+      const processed = await collectAndProcessExportAssets(
+        project,
+        this.canonicalComponents,
+        this.assetFetchOptions
+      );
+      manifest = createExportManifest(
+        project,
+        'react',
+        generatedAt,
+        processed.assets.map((asset) => asset.id),
+        compiledTokens.tokens,
+        'dark'
+      );
 
-    const stylesCss = `:root {
-${cssVarsString}
-  --studio-content-width: 1200px;
-  --studio-section-space: 80px;
-}
+      const renderedPages = project.pages.map((page) => ({
+        id: page.id,
+        name: page.name,
+        slug: page.slug,
+        sections: [...page.sections]
+          .sort((a, b) => a.order - b.order)
+          .map((section) => {
+            const rendered = renderExactExportSection(
+              section,
+              page,
+              project,
+              this.canonicalComponents,
+              (sourceUrl) => {
+                const localizedFilename = processed.urlToFilenameMap.get(sourceUrl);
+                if (!localizedFilename) throw new Error(`Localized asset mapping missing for section ${section.id}.`);
+                return `/assets/images/${localizedFilename}`;
+              }
+            );
+            return {
+              id: section.id,
+              name: section.name,
+              componentRegistryId: section.componentRegistryId,
+              motionPreset: rendered.motionPreset,
+              html: rendered.html,
+            };
+          }),
+      }));
 
-* {
-  box-sizing: border-box;
-}
+      const zip = new JSZip();
+      writeProjectFiles(zip, project, safeSlug, renderedPages, compiledTokens.cssVariables, manifest);
+      const imagesFolder = zip.folder('public/assets/images');
+      for (const asset of processed.assets) imagesFolder?.file(asset.filename, asset.buffer);
 
-body {
-  margin: 0;
-  background-color: var(--studio-bg);
-  color: var(--studio-text);
-  font-family: var(--studio-font-body);
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+      const downloadId = `${project.id}-react-${Date.now()}`;
+      exportStore.set(downloadId, { buffer: zipBuffer, filename, mimeType: 'application/zip' });
 
-.studio-site-container {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.studio-section {
-  width: 100%;
-  position: relative;
-  background-color: var(--studio-bg);
-  color: var(--studio-text);
-}
-
-.studio-section a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.studio-section img {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
-
-.grid-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 48px;
-}
-
-@media (max-width: 768px) {
-  .grid-split {
-    grid-template-columns: 1fr !important;
-    gap: 32px !important;
+      return {
+        success: true,
+        target: 'react',
+        filename,
+        mimeType: 'application/zip',
+        downloadUrl: `/api/export/download/${downloadId}`,
+        downloadId,
+        generatedAt,
+        validation,
+        manifest,
+        message: 'Standalone React source generated successfully.',
+      };
+    } catch (error) {
+      validation = appendRuntimeError(validation, error);
+      return failedResult(
+        filename,
+        generatedAt,
+        validation,
+        manifest,
+        error instanceof Error ? error.message : 'React export failed.'
+      );
+    }
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
+interface RenderedPage {
+  id: string;
+  name: string;
+  slug: string;
+  sections: Array<{
+    id: string;
+    name: string;
+    componentRegistryId: string;
+    motionPreset: string;
+    html: string;
+  }>;
 }
-`;
-    zip.file('src/styles.css', stylesCss);
 
-    // 8. src/siteData.ts
-    // Prepare localized page data
-    const exportPages = project.pages.map((page) => ({
-      id: page.id,
-      name: page.name,
-      slug: page.slug,
-      sections: (page.sections || []).map((sec) => {
-        const componentDef = componentLookup.get(sec.componentRegistryId);
-        const resolved = resolveSectionAssets(sec, componentDef, project.assets, page.id);
-        const localizedAssets: Record<string, { url: string; alt: string }> = {};
-        for (const [slot, a] of Object.entries(resolved.assets)) {
-          const filename = urlToFilenameMap.get(a.url) || 'image.png';
-          localizedAssets[slot] = {
-            url: `/assets/images/${filename}`,
-            alt: a.alt || `${sec.name} image`,
-          };
-        }
-
-        return {
-          id: sec.id,
-          name: sec.name,
-          componentRegistryId: sec.componentRegistryId,
-          motionPreset: sec.motionPreset || 'fade-in',
-          content: sec.content || {},
-          assets: localizedAssets,
-        };
-      }),
-    }));
-
-    const siteDataObject = {
-      business: {
-        name: siteTitle,
-        industry: project.business.industry,
-        direction: project.business.direction,
-        language: project.business.language,
-        description: project.business.description,
-        phone: project.business.phone,
-        email: project.business.email,
-        whatsapp: project.business.whatsapp,
+function writeProjectFiles(
+  zip: JSZip,
+  project: Project,
+  safeSlug: string,
+  renderedPages: RenderedPage[],
+  cssVariables: React.CSSProperties,
+  manifest: ReturnType<typeof createExportManifest>
+) {
+  zip.file(
+    'package.json',
+    JSON.stringify(
+      {
+        name: safeSlug,
+        private: true,
+        version: '1.0.0',
+        type: 'module',
+        scripts: { dev: 'vite', build: 'tsc --noEmit && vite build', preview: 'vite preview' },
+        dependencies: { react: '^19.1.0', 'react-dom': '^19.1.0' },
+        devDependencies: {
+          '@types/react': '^19.1.0',
+          '@types/react-dom': '^19.1.0',
+          '@vitejs/plugin-react': '^5.0.0',
+          typescript: '^5.9.0',
+          vite: '^7.0.0',
+        },
       },
-      pages: exportPages,
-    };
+      null,
+      2
+    )
+  );
 
-    const siteDataTs = `export const siteData = ${JSON.stringify(siteDataObject, null, 2)} as const;
+  zip.file(
+    'vite.config.ts',
+    `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\nexport default defineConfig({ plugins: [react()] });\n`
+  );
+  zip.file(
+    'tsconfig.json',
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: 'ES2022',
+          useDefineForClassFields: true,
+          lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+          module: 'ESNext',
+          skipLibCheck: true,
+          moduleResolution: 'Bundler',
+          resolveJsonModule: true,
+          isolatedModules: true,
+          noEmit: true,
+          jsx: 'react-jsx',
+          strict: true,
+        },
+        include: ['src'],
+      },
+      null,
+      2
+    )
+  );
 
-export type SiteData = typeof siteData;
-export type SitePageData = (typeof siteData.pages)[number];
-export type SiteSectionData = SitePageData['sections'][number];
-`;
-    zip.file('src/siteData.ts', siteDataTs);
+  const lang = languageCode(project.business.language);
+  zip.file(
+    'index.html',
+    `<!doctype html><html lang="${escapeHtml(lang)}" dir="${project.business.direction}"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${escapeHtml(project.business.businessName || project.name)}</title><meta name="description" content="${escapeHtml(project.business.description || '')}"/></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>`
+  );
+  zip.file('public/_redirects', '/* /index.html 200\n');
 
-    // 9. src/main.tsx
-    const mainTsx = `import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { App } from './App';
-import './styles.css';
+  zip.file(
+    'README.md',
+    `# ${project.business.businessName || project.name}\n\nStandalone React/Vite export generated by Natanel Studio. The exported site contains pre-rendered production markup from the exact approved Studio component implementations; it does not call Natanel Studio, Gemini, Firebase, or any Studio API at runtime.\n\n## Run\n\n\`\`\`bash\nnpm install\nnpm run dev\nnpm run build\n\`\`\`\n\nFor deep links such as /about, configure your static host to serve index.html as the SPA fallback. A Netlify-compatible public/_redirects file is included.\n`
+  );
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
-`;
-    zip.file('src/main.tsx', mainTsx);
+  zip.file('src/siteData.ts', `export const siteData = ${JSON.stringify({
+    business: {
+      name: project.business.businessName || project.name,
+      description: project.business.description,
+      direction: project.business.direction,
+      language: project.business.language,
+    },
+    pages: renderedPages,
+  }, null, 2)} as const;\nexport type SitePageData = (typeof siteData.pages)[number];\nexport type SiteSectionData = SitePageData['sections'][number];\n`);
 
-    // 10. src/components/SectionRenderer.tsx
-    const sectionRendererTsx = `import React from 'react';
-import { motion } from 'motion/react';
-import type { SiteSectionData } from '../siteData';
-import { siteData } from '../siteData';
-import { ArrowRight, ArrowLeft, ShieldCheck, CheckCircle2, Phone, Mail, ChevronDown } from 'lucide-react';
+  zip.file(
+    'src/main.tsx',
+    `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport { App } from './App';\nimport './styles.css';\nReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);\n`
+  );
 
-interface SectionRendererProps {
-  section: SiteSectionData;
+  zip.file('src/components/SectionFrame.tsx', sectionFrameSource());
+  zip.file('src/App.tsx', appSource());
+  zip.file('src/styles.css', stylesSource(cssVariables));
+  zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 }
 
-export function SectionRenderer({ section }: SectionRendererProps) {
-  const isRtl = siteData.business.direction === 'rtl';
-  const ArrowIcon = isRtl ? ArrowLeft : ArrowRight;
+function sectionFrameSource(): string {
+  return `import React, { useEffect, useRef } from 'react';\nimport type { SiteSectionData } from '../siteData';\n\nexport function SectionFrame({ section }: { section: SiteSectionData }) {\n  const ref = useRef<HTMLDivElement>(null);\n  useEffect(() => {\n    const node = ref.current;\n    if (!node) return;\n    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;\n    if (reduced || section.motionPreset === 'none' || !('IntersectionObserver' in window)) { node.classList.add('is-visible'); return; }\n    const observer = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) { node.classList.add('is-visible'); observer.disconnect(); } }, { threshold: 0.08 });\n    observer.observe(node);\n    return () => observer.disconnect();\n  }, [section.id, section.motionPreset]);\n\n  return <div ref={ref} className="studio-export-motion" data-studio-motion={section.motionPreset} data-component-id={section.componentRegistryId} dangerouslySetInnerHTML={{ __html: section.html }} />;\n}\n`;
+}
 
-  // Simple, elegant motion variants
-  const motionVariants = {
-    hidden: { opacity: 0, y: 16 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+function appSource(): string {
+  return `import React, { useEffect, useState } from 'react';\nimport { siteData } from './siteData';\nimport { SectionFrame } from './components/SectionFrame';\n\nfunction normalizedPath() { const path = window.location.pathname || '/'; return path !== '/' ? path.replace(/\\/+$/, '') : '/'; }\n\nexport function App() {\n  const [pathname, setPathname] = useState(normalizedPath);\n  useEffect(() => {\n    const onPopState = () => setPathname(normalizedPath());\n    const onClick = (event: MouseEvent) => {\n      const target = event.target instanceof Element ? event.target.closest('a') : null;\n      if (!target) return;\n      const href = target.getAttribute('href');\n      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('https://') || href.startsWith('http://')) return;\n      const url = new URL(href, window.location.origin);\n      const nextPath = url.pathname !== '/' ? url.pathname.replace(/\\/+$/, '') : '/';\n      if (!siteData.pages.some((page) => page.slug === nextPath)) return;\n      event.preventDefault();\n      window.history.pushState({}, '', nextPath);\n      setPathname(nextPath);\n      window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });\n    };\n    const onAccordionClick = (event: MouseEvent) => {\n      const target = event.target instanceof Element ? event.target.closest('.studio-accordion-trigger') : null;\n      if (!target) return;\n      const expanded = target.getAttribute('aria-expanded') === 'true';\n      target.setAttribute('aria-expanded', String(!expanded));\n      const content = target.nextElementSibling as HTMLElement | null;\n      if (content) content.hidden = expanded;\n    };\n    window.addEventListener('popstate', onPopState);\n    document.addEventListener('click', onClick);\n    document.addEventListener('click', onAccordionClick);\n    return () => { window.removeEventListener('popstate', onPopState); document.removeEventListener('click', onClick); document.removeEventListener('click', onAccordionClick); };\n  }, []);\n\n  const page = siteData.pages.find((candidate) => candidate.slug === pathname);\n  if (!page) return <main className="not-found" dir={siteData.business.direction}><div><p>404</p><h1>Page Not Found</h1><a href="/">Return home</a></div></main>;\n  return <div className="studio-site" dir={siteData.business.direction}>{page.sections.map((section) => <SectionFrame key={section.id} section={section} />)}</div>;\n}\n`;
+}
+
+function stylesSource(cssVariables: React.CSSProperties): string {
+  const vars = Object.entries(cssVariables).map(([key, value]) => `  ${key}: ${String(value)};`).join('\n');
+  return `:root{\n${vars}\n}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--studio-bg);color:var(--studio-text);font-family:var(--studio-font-body);-webkit-font-smoothing:antialiased}.studio-site{min-height:100vh}.studio-export-motion{opacity:1;transform:none;clip-path:inset(0);transition:opacity .5s cubic-bezier(.22,1,.36,1),transform .6s cubic-bezier(.22,1,.36,1),clip-path .65s cubic-bezier(.16,1,.3,1)}.studio-export-motion[data-studio-motion="fadeReveal"]:not(.is-visible),.studio-export-motion[data-studio-motion="textStagger"]:not(.is-visible){opacity:0;transform:translateY(16px)}.studio-export-motion[data-studio-motion="clipReveal"]:not(.is-visible){opacity:0;clip-path:inset(8% 0 0 0)}.studio-export-motion[data-studio-motion="imageScaleOnScroll"]:not(.is-visible){opacity:.95;transform:scale(1.05)}.studio-export-motion[data-studio-motion="stackedCards"]:not(.is-visible){opacity:0;transform:translateY(24px) scale(.98)}.studio-export-motion[data-studio-motion="fadeSettle"]:not(.is-visible){opacity:0}.studio-export-motion[data-studio-motion="none"]{opacity:1!important;transform:none!important;clip-path:none!important}.not-found{min-height:100vh;display:grid;place-items:center;padding:32px;text-align:center}.not-found p{color:var(--studio-muted);letter-spacing:.15em}.not-found a{color:var(--studio-accent)}img{max-width:100%;height:auto}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.studio-export-motion{opacity:1!important;transform:none!important;clip-path:none!important;transition:none!important}}\n`;
+}
+
+function appendRuntimeError(validation: ExportValidation, error: unknown): ExportValidation {
+  const message = error instanceof Error ? error.message : String(error);
+  const issue = {
+    code: error instanceof ExportAssetError ? 'asset_localization_failed' : error instanceof ExportSectionRenderError ? 'section_render_failed' : 'export_runtime_failed',
+    message,
+    severity: 'error' as const,
+    ...(error instanceof ExportSectionRenderError ? { pageId: error.pageId, sectionId: error.sectionId } : {}),
   };
-
-  const content = section.content as Record<string, any>;
-  const assets = section.assets as Record<string, { url: string; alt: string }>;
-
-  // Navigation
-  if (section.componentRegistryId.startsWith('nav-')) {
-    return (
-      <header className="studio-section" style={{ borderBottom: '1px solid var(--studio-border)', padding: '16px 24px' }}>
-        <div style={{ maxWidth: 'var(--studio-content-width)', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontWeight: 700, fontSize: '20px', fontFamily: 'var(--studio-font-display)' }}>
-            {content.logoText || siteData.business.name}
-          </div>
-          <nav style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            {siteData.pages.map((p) => (
-              <a key={p.id} href={'#' + (p.slug === '/' ? '' : p.slug.replace(/^\\/+/, ''))} style={{ fontSize: '14px', color: 'var(--studio-muted)' }}>
-                {p.name}
-              </a>
-            ))}
-            {content.primaryCta && (
-              <a href="#contact" style={{ padding: '8px 16px', background: 'var(--studio-primary)', color: 'var(--studio-bg)', borderRadius: '4px', fontSize: '13px', fontWeight: 600 }}>
-                {content.primaryCta}
-              </a>
-            )}
-          </nav>
-        </div>
-      </header>
-    );
-  }
-
-  // Hero section
-  if (section.componentRegistryId.startsWith('hero-')) {
-    const heroImage = assets.hero?.url || assets.hero_primary?.url || '';
-    return (
-      <motion.section initial="hidden" whileInView="visible" viewport={{ once: true }} variants={motionVariants} className="studio-section" style={{ padding: 'var(--studio-section-space) 24px', borderBottom: '1px solid var(--studio-border)' }}>
-        <div style={{ maxWidth: 'var(--studio-content-width)', margin: '0 auto' }} className="grid-split">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', justifyContent: 'center' }}>
-            {content.eyebrow && (
-              <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--studio-accent)' }}>
-                {content.eyebrow}
-              </div>
-            )}
-            <h1 style={{ fontFamily: 'var(--studio-font-display)', fontSize: 'clamp(32px, 4vw, 54px)', lineHeight: 1.15, fontWeight: 600, margin: 0 }}>
-              {content.headline}
-            </h1>
-            {content.description && (
-              <p style={{ fontSize: '16px', lineHeight: 1.6, color: 'var(--studio-muted)', margin: 0, maxWidth: '520px' }}>
-                {content.description}
-              </p>
-            )}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '8px' }}>
-              {content.primaryCta && (
-                <a href="#contact" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: 'var(--studio-primary)', color: 'var(--studio-bg)', fontWeight: 600, fontSize: '14px', borderRadius: '4px' }}>
-                  <span>{content.primaryCta}</span>
-                  <ArrowIcon size={16} />
-                </a>
-              )}
-              {content.secondaryCta && (
-                <a href="#services" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 20px', border: '1px solid var(--studio-border)', color: 'var(--studio-text)', fontSize: '14px', borderRadius: '4px' }}>
-                  {content.secondaryCta}
-                </a>
-              )}
-            </div>
-            {content.proofBadge && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--studio-muted)', fontSize: '13px', marginTop: '12px' }}>
-                <ShieldCheck size={16} style={{ color: 'var(--studio-accent)' }} />
-                <span>{content.proofBadge}</span>
-              </div>
-            )}
-          </div>
-          {heroImage && (
-            <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--studio-border)', aspectRatio: '4/3', position: 'relative' }}>
-              <img src={heroImage} alt={assets.hero?.alt || 'Hero'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
-          )}
-        </div>
-      </motion.section>
-    );
-  }
-
-  // Footer section
-  if (section.componentRegistryId.startsWith('footer-')) {
-    return (
-      <footer className="studio-section" style={{ borderTop: '1px solid var(--studio-border)', padding: '60px 24px 40px' }}>
-        <div style={{ maxWidth: 'var(--studio-content-width)', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '24px' }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '20px', fontFamily: 'var(--studio-font-display)', marginBottom: '8px' }}>
-                {siteData.business.name}
-              </div>
-              <p style={{ color: 'var(--studio-muted)', fontSize: '14px', maxWidth: '360px', margin: 0 }}>
-                {siteData.business.description}
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
-              <div>
-                <h4 style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--studio-muted)', margin: '0 0 12px' }}>Pages</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px' }}>
-                  {siteData.pages.map((p) => (
-                    <a key={p.id} href={'#' + (p.slug === '/' ? '' : p.slug.replace(/^\\/+/, ''))} style={{ color: 'var(--studio-text)' }}>
-                      {p.name}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{ borderTop: '1px solid var(--studio-border)', paddingTop: '24px', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--studio-muted)', flexWrap: 'wrap', gap: '12px' }}>
-            <div>&copy; {new Date().getFullYear()} {siteData.business.name}. All rights reserved.</div>
-            <div>Built with Natanel Studio</div>
-          </div>
-        </div>
-      </footer>
-    );
-  }
-
-  // Generic fallback for other sections (services, testimonials, cro, contact)
-  return (
-    <motion.section initial="hidden" whileInView="visible" viewport={{ once: true }} variants={motionVariants} className="studio-section" style={{ padding: 'var(--studio-section-space) 24px', borderBottom: '1px solid var(--studio-border)' }}>
-      <div style={{ maxWidth: 'var(--studio-content-width)', margin: '0 auto' }}>
-        {content.eyebrow && (
-          <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--studio-accent)', marginBottom: '12px' }}>
-            {content.eyebrow}
-          </div>
-        )}
-        <h2 style={{ fontFamily: 'var(--studio-font-display)', fontSize: 'clamp(28px, 3vw, 42px)', lineHeight: 1.2, fontWeight: 600, margin: '0 0 16px' }}>
-          {content.headline || section.name}
-        </h2>
-        {content.description && (
-          <p style={{ fontSize: '15px', lineHeight: 1.6, color: 'var(--studio-muted)', margin: '0 0 32px', maxWidth: '640px' }}>
-            {content.description}
-          </p>
-        )}
-        {content.items && Array.isArray(content.items) && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginTop: '32px' }}>
-            {content.items.map((item: any, idx: number) => (
-              <div key={idx} style={{ padding: '24px', background: 'var(--studio-surface)', border: '1px solid var(--studio-border)', borderRadius: '6px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 600, margin: '0 0 8px' }}>{item.title || item.name || \`Item \${idx + 1}\`}</h3>
-                <p style={{ fontSize: '14px', color: 'var(--studio-muted)', margin: 0 }}>{item.description || item.quote || item.text}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </motion.section>
-  );
-}
-`;
-    zip.file('src/components/SectionRenderer.tsx', sectionRendererTsx);
-
-    // 11. src/App.tsx
-    const appTsx = `import React, { useState, useEffect } from 'react';
-import { siteData } from './siteData';
-import { SectionRenderer } from './components/SectionRenderer';
-
-export function App() {
-  const [currentSlug, setCurrentSlug] = useState(() => {
-    const hash = window.location.hash.replace(/^#/, '');
-    return hash ? '/' + hash : '/';
-  });
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace(/^#/, '');
-      setCurrentSlug(hash ? '/' + hash : '/');
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  const activePage =
-    siteData.pages.find((p) => p.slug === currentSlug) ||
-    siteData.pages.find((p) => p.slug === '/') ||
-    siteData.pages[0];
-
-  return (
-    <div className="studio-site-container" dir={siteData.business.direction}>
-      {activePage?.sections.map((section) => (
-        <SectionRenderer key={section.id} section={section} />
-      ))}
-    </div>
-  );
-}
-`;
-    zip.file('src/App.tsx', appTsx);
-
-    // 12. manifest.json
-    zip.file('manifest.json', JSON.stringify(manifest, null, 2));
-
-    // Generate ZIP buffer
-    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
-    const downloadId = `${project.id}-react-${Date.now()}`;
-
-    const { exportStore } = await import('./exportStore');
-    exportStore.set(downloadId, {
-      buffer: zipBuffer,
-      filename,
-      mimeType: 'application/zip',
-    });
-
-    return {
-      success: true,
-      target: 'react',
-      filename,
-      mimeType: 'application/zip',
-      downloadUrl: `/api/export/download/${downloadId}`,
-      downloadId,
-      generatedAt,
-      validation,
-      manifest,
-      message: 'React source ZIP generated successfully.',
-    };
-  }
+  return { valid: false, errors: [...validation.errors, message], warnings: validation.warnings, issues: [...validation.issues, issue] };
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function failedResult(
+  filename: string,
+  generatedAt: string,
+  validation: ExportValidation,
+  manifest: ReturnType<typeof createExportManifest>,
+  message: string
+): ExportResult {
+  return { success: false, target: 'react', filename, mimeType: 'application/zip', generatedAt, validation, manifest, message };
+}
+
+function sanitizeSlug(value: string): string {
+  const cleaned = value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return cleaned || 'website';
+}
+
+function languageCode(language: string): string {
+  const normalized = (language || '').toLowerCase();
+  if (normalized.includes('hebrew') || normalized.includes('עבר')) return 'he';
+  if (normalized.includes('french') || normalized.includes('fran')) return 'fr';
+  return 'en';
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
