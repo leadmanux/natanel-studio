@@ -201,7 +201,7 @@ function validateSection(
     if (!contentValidation.success) {
       issues.push({
         code: 'invalid_section_content',
-        message: `Section "${section.name}" does not satisfy its content contract: ${contentValidation.errors.join('; ')}.`,
+        message: `Section "${section.name}" does not satisfy its content contract: ${(contentValidation.errors || []).join('; ')}.`,
         severity: 'error',
         pageId: page.id,
         sectionId: section.id,
