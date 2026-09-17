@@ -1,45 +1,53 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Layers,
-  Plus,
-  Trash2,
-  ArrowUp,
-  ArrowDown,
-  Copy,
-  RefreshCw,
-  CheckCircle2,
   AlertTriangle,
-  AlertCircle,
-  Edit3,
-  Image as ImageIcon,
-  Sparkles,
-  Monitor,
-  Tablet,
-  Smartphone,
-  ChevronRight,
-  ExternalLink,
-  ShieldAlert,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   Check,
+  CheckCircle2,
+  Copy,
+  Database,
+  Image as ImageIcon,
+  Layers,
+  Monitor,
+  Plus,
+  RefreshCw,
+  Smartphone,
+  Tablet,
+  Trash2,
   X,
-  FileText,
-  Settings,
 } from 'lucide-react';
-import type { Project, SitePage, SiteSection, SectionContentStatus } from '@shared/project';
-import { demoComponents, type ComponentDefinition } from '@shared/componentRegistry';
-import { hasComponentImplementation } from '@shared/componentImplementations';
+import type { ComponentDefinition } from '@shared/componentRegistry';
+import type { Project, SitePage, SiteSection } from '@shared/project';
+import { getEligibleComponents } from '@shared/componentEligibility';
 import { getContentContract, validateComponentContent } from '@shared/contentContracts';
 import { resolveSectionAssets } from '@shared/assetBinding';
+import { createStablePageSlug, normalizeManualSlug } from '@shared/pageSlug';
+import { normalizeStudioMotionPreset, STUDIO_MOTION_PRESETS, type StudioMotionPreset } from '@shared/studioMotion';
+import { componentRegistryRepository } from '../data/componentRegistryRepository';
+import { requestSectionCompose, requestSiteCompose, requestSitePlan } from '../ai/client';
 import { StudioSiteRenderer } from '../studio-components/StudioSiteRenderer';
-import { requestSitePlan, requestSiteCompose, requestSectionCompose } from '../ai/client';
-import type { SiteComposerProgress, SectionCompositionProgressStatus } from '../ai/contracts';
-import type { StudioMotionPreset } from '../studio-components/types';
+import { ProjectFactsEditor } from './build/ProjectFactsEditor';
 
 export interface BuildWorkspaceProps {
   project: Project;
   onUpdateProject: (updated: Project) => void;
   onProceedToPreview?: () => void;
   onProceedToDesign?: () => void;
+  onProceedToAssets?: () => void;
+}
+
+function sectionReady(section: SiteSection): boolean {
+  return (
+    section.contentStatus === 'ready' &&
+    !(section.missingFactualFields?.length) &&
+    !(section.missingAssetRequirements?.length)
+  );
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
 }
 
 export function BuildWorkspace({
@@ -47,1351 +55,451 @@ export function BuildWorkspace({
   onUpdateProject,
   onProceedToPreview,
   onProceedToDesign,
+  onProceedToAssets,
 }: BuildWorkspaceProps) {
-  // Navigation & Selection state
-  const [selectedPageId, setSelectedPageId] = useState<string>(() => {
-    return project.pages && project.pages.length > 0 ? project.pages[0].id : '';
-  });
+  const [registry, setRegistry] = useState<ComponentDefinition[]>(() => componentRegistryRepository.getSynchronous());
+  const [registryOffline, setRegistryOffline] = useState(false);
+  const [selectedPageId, setSelectedPageId] = useState(project.pages[0]?.id || '');
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
-
-  // Viewport & Canvas mode
   const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
-
-  // AI Orchestration state
-  const [isComposing, setIsComposing] = useState(false);
-  const [compositionProgress, setCompositionProgress] = useState<SiteComposerProgress | null>(null);
-  const [compositionMessage, setCompositionMessage] = useState<string | null>(null);
   const [isPlanning, setIsPlanning] = useState(false);
-  const [isRegeneratingSection, setIsRegeneratingSection] = useState(false);
-
-  // Modals / Dropdowns
-  const [isAddPageModalOpen, setIsAddPageModalOpen] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [showFacts, setShowFacts] = useState(false);
+  const [showAddPage, setShowAddPage] = useState(false);
+  const [showAddSection, setShowAddSection] = useState(false);
   const [newPageName, setNewPageName] = useState('');
   const [newPageSlug, setNewPageSlug] = useState('');
   const [pageError, setPageError] = useState<string | null>(null);
-  const [isAddSectionModalOpen, setIsAddSectionModalOpen] = useState(false);
 
-  // Selected Page
-  const currentPage = useMemo(() => {
-    if (!project.pages || project.pages.length === 0) return undefined;
-    return project.pages.find((p) => p.id === selectedPageId) || project.pages[0];
-  }, [project.pages, selectedPageId]);
-
-  // Selected Section
-  const currentSection = useMemo(() => {
-    if (!currentPage || !selectedSectionId) return undefined;
-    return currentPage.sections.find((s) => s.id === selectedSectionId);
-  }, [currentPage, selectedSectionId]);
-
-  // Canonical Approved Components only
-  const approvedComponents = useMemo(() => {
-    return demoComponents.filter(
-      (c) => c.status === 'approved' && hasComponentImplementation(c.id)
-    );
+  useEffect(() => {
+    const unsubscribe = componentRegistryRepository.subscribe((components) => {
+      setRegistry(components);
+      setRegistryOffline(false);
+    });
+    componentRegistryRepository.syncWithServer()
+      .then((components) => { setRegistry(components); setRegistryOffline(false); })
+      .catch(() => setRegistryOffline(true));
+    return unsubscribe;
   }, []);
 
-  const isRtl = project.business.direction === 'rtl';
+  useEffect(() => {
+    if (!selectedPageId && project.pages[0]) setSelectedPageId(project.pages[0].id);
+  }, [project.pages, selectedPageId]);
 
-  // Compatible components for replacement (filtered by direction & project type)
-  const compatibleReplacementOptions = useMemo(() => {
-    if (!currentSection) return [];
-    return approvedComponents.filter((c) => {
-      if (isRtl && c.rtlReady === false) return false;
-      if (c.category === 'ecommerce' && project.projectType !== 'shopify') return false;
-      return true;
+  const currentPage = useMemo(
+    () => project.pages.find((page) => page.id === selectedPageId) || project.pages[0],
+    [project.pages, selectedPageId]
+  );
+  const currentSection = useMemo(
+    () => currentPage?.sections.find((section) => section.id === selectedSectionId),
+    [currentPage, selectedSectionId]
+  );
+
+  const eligibleComponents = useMemo(() => getEligibleComponents(registry, project), [registry, project]);
+  const definitionMap = useMemo(() => new Map(registry.map((item) => [item.id, item])), [registry]);
+  const currentDefinition = currentSection ? definitionMap.get(currentSection.componentRegistryId) : undefined;
+  const currentContract = currentSection ? getContentContract(currentSection.componentRegistryId) : undefined;
+  const currentAssetResolution = useMemo(() => {
+    if (!currentPage || !currentSection) return null;
+    return resolveSectionAssets(currentSection, currentDefinition, project.assets, currentPage.id);
+  }, [currentPage, currentSection, currentDefinition, project.assets]);
+
+  const replacementOptions = useMemo(() => {
+    if (!currentDefinition) return [];
+    return eligibleComponents.filter((item) => item.category === currentDefinition.category);
+  }, [eligibleComponents, currentDefinition]);
+
+  const updateSection = (pageId: string, sectionId: string, updater: (section: SiteSection) => SiteSection) => {
+    const pages = project.pages.map((page) => page.id !== pageId ? page : {
+      ...page,
+      sections: page.sections.map((section) => section.id === sectionId ? updater(section) : section),
     });
-  }, [currentSection, approvedComponents, isRtl, project.projectType]);
+    onUpdateProject({ ...project, pages, updatedAt: new Date().toISOString() });
+  };
 
-  // --- ACTIONS: SITE PLANNING ---
-  const handlePlanSiteStructure = async () => {
+  const handlePlan = async () => {
     setIsPlanning(true);
+    setMessage('Planning site structure from the canonical component registry…');
     try {
-      const plannedPages = await requestSitePlan(project);
-      const updated: Project = {
-        ...project,
-        pages: plannedPages,
-        status: project.status === 'brief' ? 'building' : project.status,
-        updatedAt: new Date().toISOString(),
-      };
-      onUpdateProject(updated);
-      if (plannedPages.length > 0) {
-        setSelectedPageId(plannedPages[0].id);
-        if (plannedPages[0].sections.length > 0) {
-          setSelectedSectionId(plannedPages[0].sections[0].id);
-        }
-      }
-    } catch (err: any) {
-      alert(`Site planning failed: ${err.message}`);
+      const pages = await requestSitePlan(project);
+      onUpdateProject({ ...project, pages, status: 'building', updatedAt: new Date().toISOString() });
+      setSelectedPageId(pages[0]?.id || '');
+      setSelectedSectionId(pages[0]?.sections[0]?.id || null);
+      setMessage(`Planned ${pages.length} page${pages.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      setMessage(`Planning failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsPlanning(false);
     }
   };
 
-  // --- ACTIONS: COMPOSE WEBSITE ---
-  const handleComposeWebsite = async () => {
-    // Check if design system has been approved
-    if (!project.designSystem.artDirection) {
-      const proceed = window.confirm(
-        'Art Direction has not been approved in the Design tab yet. Composition will use baseline tokens. Proceed?'
-      );
-      if (!proceed) return;
-    }
-
-    // Check if pages exist
-    if (!project.pages || project.pages.length === 0) {
-      alert('Please plan site structure before composing copy.');
-      return;
-    }
-
+  const handleCompose = async () => {
+    if (!project.pages.length) return handlePlan();
+    if (!project.designSystem.artDirection && !window.confirm('Art direction is not approved. Compose with explicit fallback tokens?')) return;
     setIsComposing(true);
-    setCompositionMessage('Initiating Studio Content Composer...');
-
+    setMessage('Composing production-safe copy and binding verified assets…');
     try {
-      // Stream step-by-step progress simulation visually while calling server composer
-      const totalSections = project.pages.reduce((acc, p) => acc + p.sections.length, 0);
-      let count = 0;
-
-      for (const p of project.pages) {
-        for (const s of p.sections) {
-          count++;
-          setCompositionProgress({
-            pageId: p.id,
-            pageName: p.name,
-            sectionId: s.id,
-            sectionName: s.name,
-            status: 'generating_copy',
-            message: `Writing copy for ${s.name} (${count}/${totalSections})...`,
-          });
-        }
-      }
-
       const result = await requestSiteCompose(project);
-
-      const updated: Project = {
+      const allReady = result.pages.every((page) => page.sections.every(sectionReady));
+      onUpdateProject({
         ...project,
         pages: result.pages,
-        status: 'review',
+        status: allReady ? 'review' : 'building',
         updatedAt: new Date().toISOString(),
-      };
-
-      onUpdateProject(updated);
-      setCompositionMessage('Composition complete! All sections updated with truthful content.');
-      setTimeout(() => {
-        setIsComposing(false);
-        setCompositionProgress(null);
-        setCompositionMessage(null);
-      }, 1200);
-    } catch (err: any) {
-      alert(`Composition failed: ${err.message}`);
+      });
+      setMessage(allReady ? 'Composition complete. Site is ready for review.' : 'Composition complete. Some sections still need verified facts or assets.');
+    } catch (error) {
+      setMessage(`Composition failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
       setIsComposing(false);
-      setCompositionProgress(null);
-      setCompositionMessage(null);
     }
   };
 
-  // --- ACTIONS: REGENERATE SECTION COPY ---
-  const handleRegenerateSectionCopy = async () => {
+  const handleRegenerate = async () => {
     if (!currentPage || !currentSection) return;
-    setIsRegeneratingSection(true);
-
+    setIsRegenerating(true);
     try {
       const result = await requestSectionCompose(project, currentPage.id, currentSection.id);
-      const updatedPages = project.pages.map((p) => {
-        if (p.id !== currentPage.id) return p;
-        return {
-          ...p,
-          sections: p.sections.map((s) => (s.id === currentSection.id ? result.section : s)),
-        };
-      });
-
-      const updated: Project = {
-        ...project,
-        pages: updatedPages,
-        updatedAt: new Date().toISOString(),
-      };
-      onUpdateProject(updated);
-    } catch (err: any) {
-      alert(`Section regeneration failed: ${err.message}`);
+      updateSection(currentPage.id, currentSection.id, () => result.section);
+      setMessage(result.section.contentStatus === 'ready' ? 'Section recomposed and ready.' : 'Section recomposed; verified input is still required.');
+    } catch (error) {
+      setMessage(`Section composition failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      setIsRegeneratingSection(false);
+      setIsRegenerating(false);
     }
   };
 
-  // --- MANUAL PAGE CONTROLS (Section 13) ---
   const handleAddPage = () => {
-    if (!newPageName.trim()) {
-      setPageError('Page name is required.');
-      return;
+    const name = newPageName.trim();
+    if (!name) return setPageError('Page name is required.');
+    const used = new Set(project.pages.map((page) => page.slug.toLowerCase()));
+    const slug = newPageSlug.trim()
+      ? normalizeManualSlug(newPageSlug)
+      : createStablePageSlug(name, project.pages.length, used);
+    if (project.pages.some((page) => page.slug.toLowerCase() === slug.toLowerCase())) {
+      return setPageError(`Slug "${slug}" is already in use.`);
     }
-
-    let slug = newPageSlug.trim();
-    if (!slug) {
-      slug = `/${newPageName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-    }
-    if (!slug.startsWith('/')) {
-      slug = `/${slug}`;
-    }
-
-    // Check duplicate slug
-    const exists = project.pages.some((p) => p.slug.toLowerCase() === slug.toLowerCase());
-    if (exists) {
-      setPageError(`A page with slug "${slug}" already exists.`);
-      return;
-    }
-
-    const newPage: SitePage = {
-      id: `page_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      name: newPageName.trim(),
+    const page: SitePage = {
+      id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name,
       slug,
-      purpose: `${newPageName.trim()} page`,
+      purpose: `${name} page`,
       sections: [],
     };
-
-    const updated: Project = {
-      ...project,
-      pages: [...project.pages, newPage],
-      updatedAt: new Date().toISOString(),
-    };
-
-    onUpdateProject(updated);
-    setSelectedPageId(newPage.id);
-    setIsAddPageModalOpen(false);
+    onUpdateProject({ ...project, pages: [...project.pages, page], updatedAt: new Date().toISOString() });
+    setSelectedPageId(page.id);
+    setSelectedSectionId(null);
+    setShowAddPage(false);
     setNewPageName('');
     setNewPageSlug('');
     setPageError(null);
   };
 
   const handleDeletePage = (pageId: string) => {
-    if (project.pages.length <= 1) {
-      alert('Cannot delete the last page of the project.');
-      return;
-    }
-    const page = project.pages.find((p) => p.id === pageId);
-    if (!confirm(`Are you sure you want to delete page "${page?.name || 'this page'}"?`)) {
-      return;
-    }
-
-    const updatedPages = project.pages.filter((p) => p.id !== pageId);
-    const updated: Project = {
-      ...project,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-    };
-    onUpdateProject(updated);
-    if (selectedPageId === pageId) {
-      setSelectedPageId(updatedPages[0].id);
-      setSelectedSectionId(null);
-    }
+    if (project.pages.length <= 1) return setMessage('The final page cannot be deleted.');
+    const page = project.pages.find((item) => item.id === pageId);
+    if (!window.confirm(`Delete "${page?.name || 'this page'}"?`)) return;
+    const pages = project.pages.filter((item) => item.id !== pageId);
+    onUpdateProject({ ...project, pages, updatedAt: new Date().toISOString() });
+    setSelectedPageId(pages[0]?.id || '');
+    setSelectedSectionId(null);
   };
 
-  const handleUpdatePageSlug = (pageId: string, newSlug: string) => {
-    let clean = newSlug.trim();
-    if (!clean.startsWith('/')) clean = `/${clean}`;
-
-    const exists = project.pages.some(
-      (p) => p.id !== pageId && p.slug.toLowerCase() === clean.toLowerCase()
-    );
-    if (exists) {
-      alert(`A page with slug "${clean}" already exists.`);
-      return;
-    }
-
-    const updatedPages = project.pages.map((p) => (p.id === pageId ? { ...p, slug: clean } : p));
-    onUpdateProject({ ...project, pages: updatedPages, updatedAt: new Date().toISOString() });
-  };
-
-  // --- MANUAL SECTION CONTROLS (Section 10 & 13) ---
   const handleAddSection = (componentId: string) => {
     if (!currentPage) return;
-    const comp = approvedComponents.find((c) => c.id === componentId);
-    if (!comp) return;
-
-    const newSection: SiteSection = {
-      id: `sec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      name: comp.name,
-      componentRegistryId: comp.id,
-      purpose: comp.description || comp.name,
+    const component = eligibleComponents.find((item) => item.id === componentId);
+    if (!component) return;
+    const section: SiteSection = {
+      id: `sec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: component.name,
+      componentRegistryId: component.id,
+      purpose: component.description || component.name,
       content: {},
       assetIds: [],
+      assetBindings: {},
       order: currentPage.sections.length + 1,
       motionPreset: 'fadeSettle',
       contentStatus: 'needs_input',
+      contentApproved: false,
     };
-
-    const updatedPages = project.pages.map((p) => {
-      if (p.id !== currentPage.id) return p;
-      return {
-        ...p,
-        sections: [...p.sections, newSection],
-      };
-    });
-
-    onUpdateProject({ ...project, pages: updatedPages, updatedAt: new Date().toISOString() });
-    setSelectedSectionId(newSection.id);
-    setIsAddSectionModalOpen(false);
+    const pages = project.pages.map((page) => page.id === currentPage.id ? { ...page, sections: [...page.sections, section] } : page);
+    onUpdateProject({ ...project, pages, updatedAt: new Date().toISOString() });
+    setSelectedSectionId(section.id);
+    setShowAddSection(false);
   };
 
   const handleRemoveSection = (sectionId: string) => {
     if (!currentPage) return;
-    const updatedSections = currentPage.sections
-      .filter((s) => s.id !== sectionId)
-      .map((s, idx) => ({ ...s, order: idx + 1 }));
-
-    const updatedPages = project.pages.map((p) =>
-      p.id === currentPage.id ? { ...p, sections: updatedSections } : p
-    );
-
-    onUpdateProject({ ...project, pages: updatedPages, updatedAt: new Date().toISOString() });
-    if (selectedSectionId === sectionId) {
-      setSelectedSectionId(null);
-    }
+    const sections = currentPage.sections.filter((item) => item.id !== sectionId).map((item, index) => ({ ...item, order: index + 1 }));
+    const pages = project.pages.map((page) => page.id === currentPage.id ? { ...page, sections } : page);
+    onUpdateProject({ ...project, pages, updatedAt: new Date().toISOString() });
+    if (selectedSectionId === sectionId) setSelectedSectionId(null);
   };
 
   const handleDuplicateSection = (sectionId: string) => {
     if (!currentPage) return;
-    const targetIdx = currentPage.sections.findIndex((s) => s.id === sectionId);
-    if (targetIdx === -1) return;
-
-    const source = currentPage.sections[targetIdx];
+    const index = currentPage.sections.findIndex((item) => item.id === sectionId);
+    if (index < 0) return;
+    const source = currentPage.sections[index];
     const clone: SiteSection = {
       ...source,
-      id: `sec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: `sec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name: `${source.name} (Copy)`,
-      order: targetIdx + 2,
+      contentApproved: false,
+      assetBindings: { ...(source.assetBindings || {}) },
     };
-
-    const nextSections = [
-      ...currentPage.sections.slice(0, targetIdx + 1),
-      clone,
-      ...currentPage.sections.slice(targetIdx + 1),
-    ].map((s, idx) => ({ ...s, order: idx + 1 }));
-
-    const updatedPages = project.pages.map((p) =>
-      p.id === currentPage.id ? { ...p, sections: nextSections } : p
-    );
-
-    onUpdateProject({ ...project, pages: updatedPages, updatedAt: new Date().toISOString() });
+    const sections = [...currentPage.sections.slice(0, index + 1), clone, ...currentPage.sections.slice(index + 1)]
+      .map((item, position) => ({ ...item, order: position + 1 }));
+    const pages = project.pages.map((page) => page.id === currentPage.id ? { ...page, sections } : page);
+    onUpdateProject({ ...project, pages, updatedAt: new Date().toISOString() });
     setSelectedSectionId(clone.id);
   };
 
-  const handleMoveSection = (sectionId: string, direction: 'up' | 'down') => {
+  const handleMove = (sectionId: string, delta: -1 | 1) => {
     if (!currentPage) return;
-    const idx = currentPage.sections.findIndex((s) => s.id === sectionId);
-    if (idx === -1) return;
-    if (direction === 'up' && idx === 0) return;
-    if (direction === 'down' && idx === currentPage.sections.length - 1) return;
-
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    const reordered = [...currentPage.sections];
-    const temp = reordered[idx];
-    reordered[idx] = reordered[swapIdx];
-    reordered[swapIdx] = temp;
-
-    const indexed = reordered.map((s, i) => ({ ...s, order: i + 1 }));
-
-    const updatedPages = project.pages.map((p) =>
-      p.id === currentPage.id ? { ...p, sections: indexed } : p
-    );
-
-    onUpdateProject({ ...project, pages: updatedPages, updatedAt: new Date().toISOString() });
+    const index = currentPage.sections.findIndex((item) => item.id === sectionId);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= currentPage.sections.length) return;
+    const sections = [...currentPage.sections];
+    [sections[index], sections[target]] = [sections[target], sections[index]];
+    const ordered = sections.map((item, position) => ({ ...item, order: position + 1 }));
+    const pages = project.pages.map((page) => page.id === currentPage.id ? { ...page, sections: ordered } : page);
+    onUpdateProject({ ...project, pages, updatedAt: new Date().toISOString() });
   };
 
-  const handleReplaceComponent = (newRegistryId: string) => {
+  const handleReplace = (componentId: string) => {
     if (!currentPage || !currentSection) return;
-    const comp = approvedComponents.find((c) => c.id === newRegistryId);
-    if (!comp) return;
-
-    const updatedSection: SiteSection = {
-      ...currentSection,
-      componentRegistryId: comp.id,
-      name: comp.name,
-      content: {}, // Reset content to avoid invalid shape
+    const component = replacementOptions.find((item) => item.id === componentId);
+    if (!component) return;
+    updateSection(currentPage.id, currentSection.id, (section) => ({
+      ...section,
+      name: component.name,
+      componentRegistryId: component.id,
+      content: {},
+      assetIds: [],
+      assetBindings: {},
       contentStatus: 'needs_input',
-      contentDiagnostics: ['Component replaced. Click Regenerate Copy or edit content in inspector.'],
-    };
-
-    const updatedPages = project.pages.map((p) => {
-      if (p.id !== currentPage.id) return p;
-      return {
-        ...p,
-        sections: p.sections.map((s) => (s.id === currentSection.id ? updatedSection : s)),
-      };
-    });
-
-    onUpdateProject({ ...project, pages: updatedPages, updatedAt: new Date().toISOString() });
+      contentApproved: false,
+      missingFactualFields: undefined,
+      missingAssetRequirements: undefined,
+      contentDiagnostics: ['Component replaced. Recompose this section before approval.'],
+    }));
   };
 
-  const handleUpdateSectionField = (field: string, value: any) => {
-    if (!currentPage || !currentSection) return;
-
-    const nextContent = {
-      ...currentSection.content,
-      [field]: value,
-    };
-
-    // Revalidate against contract
+  const handleGeneratedField = (field: string, value: unknown) => {
+    if (!currentPage || !currentSection || !currentContract?.generatedCopyFields.includes(field)) return;
+    const nextContent = { ...currentSection.content, [field]: value };
     const validation = validateComponentContent(currentSection.componentRegistryId, nextContent);
-
-    const updatedSection: SiteSection = {
-      ...currentSection,
+    const missingFacts = currentSection.missingFactualFields || [];
+    const missingAssets = currentAssetResolution?.missingMandatorySlots.map((slot) => slot.slot) || [];
+    const status = missingFacts.length || missingAssets.length ? 'needs_input' : validation.success ? 'ready' : 'invalid';
+    updateSection(currentPage.id, currentSection.id, (section) => ({
+      ...section,
       content: nextContent,
-      contentStatus: validation.success ? 'ready' : 'needs_input',
-      missingFactualFields: currentSection.missingFactualFields?.filter((f) => f !== field && value),
-    };
-
-    const updatedPages = project.pages.map((p) => {
-      if (p.id !== currentPage.id) return p;
-      return {
-        ...p,
-        sections: p.sections.map((s) => (s.id === currentSection.id ? updatedSection : s)),
-      };
-    });
-
-    onUpdateProject({ ...project, pages: updatedPages, updatedAt: new Date().toISOString() });
+      contentStatus: status,
+      contentApproved: false,
+      missingAssetRequirements: missingAssets,
+      contentDiagnostics: validation.success ? section.contentDiagnostics : validation.errors,
+    }));
   };
 
-  const handleUpdateMotionPreset = (preset: StudioMotionPreset) => {
+  const handleAssetBinding = (slot: string, assetId: string) => {
     if (!currentPage || !currentSection) return;
-
-    const updatedSection: SiteSection = {
+    const bindings = { ...(currentSection.assetBindings || {}) };
+    if (assetId) bindings[slot] = assetId;
+    else delete bindings[slot];
+    const draft: SiteSection = {
       ...currentSection,
-      motionPreset: preset,
+      assetBindings: bindings,
+      assetIds: unique(Object.values(bindings)),
+      contentApproved: false,
     };
-
-    const updatedPages = project.pages.map((p) => {
-      if (p.id !== currentPage.id) return p;
-      return {
-        ...p,
-        sections: p.sections.map((s) => (s.id === currentSection.id ? updatedSection : s)),
-      };
-    });
-
-    onUpdateProject({ ...project, pages: updatedPages, updatedAt: new Date().toISOString() });
+    const resolution = resolveSectionAssets(draft, currentDefinition, project.assets, currentPage.id);
+    const missingAssets = resolution.missingMandatorySlots.map((item) => item.slot);
+    const validation = validateComponentContent(draft.componentRegistryId, draft.content);
+    const status = (draft.missingFactualFields?.length || missingAssets.length)
+      ? 'needs_input'
+      : validation.success ? 'ready' : 'invalid';
+    updateSection(currentPage.id, currentSection.id, () => ({
+      ...draft,
+      assetIds: resolution.boundAssetIds,
+      missingAssetRequirements: missingAssets,
+      contentStatus: status,
+    }));
   };
+
+  const handleApprove = () => {
+    if (!currentPage || !currentSection || !sectionReady(currentSection)) return;
+    updateSection(currentPage.id, currentSection.id, (section) => ({ ...section, contentApproved: true }));
+  };
+
+  const handleMotion = (preset: StudioMotionPreset) => {
+    if (!currentPage || !currentSection) return;
+    updateSection(currentPage.id, currentSection.id, (section) => ({ ...section, motionPreset: normalizeStudioMotionPreset(preset), contentApproved: false }));
+  };
+
+  const eligibleAssets = project.assets.filter((asset) => (asset.status === 'approved' || asset.status === 'generated') && asset.outputUrl);
+  const canApprove = Boolean(currentSection && sectionReady(currentSection));
 
   return (
-    <div className="build-workspace-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '840px', background: '#09090b' }}>
-      {/* Workspace Sub-Header / Global Action Bar */}
-      <div
-        className="build-workspace-topbar"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 20px',
-          background: '#121216',
-          borderBottom: '1px solid #222226',
-          zIndex: 40,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span className="eyebrow" style={{ margin: 0 }}>
-            SITE COMPOSER V1
-          </span>
-          <span style={{ color: '#52525b' }}>|</span>
-          <span style={{ fontSize: '13px', color: '#d4d4d8', fontWeight: 500 }}>
-            {project.business.businessName || project.name}
-          </span>
-          {isRtl && (
-            <span
-              style={{
-                fontSize: '11px',
-                padding: '2px 6px',
-                background: 'rgba(214, 168, 79, 0.15)',
-                color: '#d6a84f',
-                border: '1px solid rgba(214, 168, 79, 0.3)',
-                borderRadius: '3px',
-              }}
-            >
-              RTL
-            </span>
-          )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 820, background: '#09090b', color: '#e4e4e7' }}>
+      <div style={{ minHeight: 54, padding: '9px 16px', borderBottom: '1px solid #232328', background: '#111114', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#71717a' }}>SITE COMPOSER</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{project.business.businessName || project.name}</div>
         </div>
-
-        {/* Viewport & Theme controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ display: 'flex', background: '#18181b', padding: '3px', borderRadius: '4px', border: '1px solid #27272a' }}>
-            <button
-              title="Desktop"
-              onClick={() => setViewport('desktop')}
-              style={{
-                background: viewport === 'desktop' ? '#27272a' : 'transparent',
-                color: viewport === 'desktop' ? '#ffffff' : '#71717a',
-                border: 'none',
-                padding: '5px 8px',
-                cursor: 'pointer',
-                borderRadius: '2px',
-              }}
-            >
-              <Monitor size={14} />
+        <div style={{ display: 'flex', gap: 5 }}>
+          {(['desktop', 'tablet', 'mobile'] as const).map((mode) => (
+            <button key={mode} onClick={() => setViewport(mode)} title={mode} style={{ border: '1px solid #2b2b31', background: viewport === mode ? '#29292f' : '#17171b', color: '#c6c6cc', borderRadius: 4, padding: '6px 8px', cursor: 'pointer' }}>
+              {mode === 'desktop' ? <Monitor size={14} /> : mode === 'tablet' ? <Tablet size={14} /> : <Smartphone size={14} />}
             </button>
-            <button
-              title="Tablet"
-              onClick={() => setViewport('tablet')}
-              style={{
-                background: viewport === 'tablet' ? '#27272a' : 'transparent',
-                color: viewport === 'tablet' ? '#ffffff' : '#71717a',
-                border: 'none',
-                padding: '5px 8px',
-                cursor: 'pointer',
-                borderRadius: '2px',
-              }}
-            >
-              <Tablet size={14} />
-            </button>
-            <button
-              title="Mobile"
-              onClick={() => setViewport('mobile')}
-              style={{
-                background: viewport === 'mobile' ? '#27272a' : 'transparent',
-                color: viewport === 'mobile' ? '#ffffff' : '#71717a',
-                border: 'none',
-                padding: '5px 8px',
-                cursor: 'pointer',
-                borderRadius: '2px',
-              }}
-            >
-              <Smartphone size={14} />
-            </button>
-          </div>
-
-          <button
-            title="Toggle theme"
-            onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
-            style={{
-              background: '#18181b',
-              color: '#a1a1aa',
-              border: '1px solid #27272a',
-              padding: '5px 10px',
-              fontSize: '11px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            {themeMode.toUpperCase()}
-          </button>
+          ))}
+          <button onClick={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')} style={{ border: '1px solid #2b2b31', background: '#17171b', color: '#aaaab2', borderRadius: 4, padding: '6px 9px', cursor: 'pointer', fontSize: 11 }}>{themeMode.toUpperCase()}</button>
         </div>
-
-        {/* Primary Build Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {project.pages.length === 0 ? (
-            <button
-              className="secondary-button"
-              onClick={handlePlanSiteStructure}
-              disabled={isPlanning}
-              style={{ padding: '6px 14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Sparkles size={14} />
-              <span>{isPlanning ? 'Planning Structure...' : 'Plan Site Structure'}</span>
-            </button>
-          ) : (
-            <button
-              className="primary-button"
-              onClick={handleComposeWebsite}
-              disabled={isComposing}
-              style={{
-                padding: '7px 16px',
-                fontSize: '12px',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: isComposing ? '#27272a' : '#2563eb',
-              }}
-            >
-              <Sparkles size={15} />
-              <span>{isComposing ? 'Composing Truthful Copy...' : 'COMPOSE WEBSITE'}</span>
-            </button>
-          )}
-
-          {onProceedToPreview && (
-            <button
-              className="secondary-button"
-              onClick={onProceedToPreview}
-              style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <span>Preview</span>
-              <ArrowRight size={13} />
-            </button>
-          )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {registryOffline && <span style={{ color: '#f59e0b', fontSize: 10 }}>OFFLINE REGISTRY CACHE</span>}
+          <button onClick={() => setShowFacts(true)} style={{ border: '1px solid #303038', background: '#18181d', color: '#d4d4d8', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', fontSize: 11 }}><Database size={13} /> Verified Facts</button>
+          <button onClick={handleCompose} disabled={isComposing || isPlanning} style={{ border: 'none', background: '#2563eb', color: '#fff', padding: '8px 13px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>{isComposing ? 'Composing…' : project.pages.length ? 'COMPOSE WEBSITE' : 'PLAN SITE'}</button>
+          {onProceedToPreview && <button onClick={onProceedToPreview} style={{ border: '1px solid #303038', background: '#18181d', color: '#d4d4d8', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 5, alignItems: 'center', fontSize: 11 }}>Preview <ArrowRight size={12} /></button>}
         </div>
       </div>
 
-      {/* Composition Progress Banner */}
-      {isComposing && compositionProgress && (
-        <div
-          style={{
-            background: '#1e3a8a',
-            color: '#bfdbfe',
-            padding: '8px 20px',
-            fontSize: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderBottom: '1px solid #1d4ed8',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <RefreshCw size={13} className="animate-spin" />
-            <span>
-              <strong>Composing:</strong> {compositionProgress.pageName} &gt; {compositionProgress.sectionName}
-            </span>
-          </div>
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', opacity: 0.8 }}>
-            Status: {compositionProgress.status}
-          </span>
-        </div>
-      )}
+      {message && <div style={{ padding: '7px 16px', fontSize: 11, color: '#b6c8ff', background: '#111a31', borderBottom: '1px solid #22355d' }}>{message}</div>}
 
-      {/* 3-Pane Professional Architecture */}
-      <div className="build-workspace-panes" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* ========================================================================= */}
-        {/* PANE 1: LEFT SIDEBAR (PAGE TREE & SECTION OUTLINE)                        */}
-        {/* ========================================================================= */}
-        <div
-          className="pane-left-tree"
-          style={{
-            width: '280px',
-            background: '#111114',
-            borderRight: '1px solid #222226',
-            display: 'flex',
-            flexDirection: 'column',
-            overflowY: 'auto',
-          }}
-        >
-          {/* Pages Header */}
-          <div
-            style={{
-              padding: '12px 16px',
-              borderBottom: '1px solid #1f1f23',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#71717a' }}>
-              Pages ({project.pages.length})
-            </span>
-            <button
-              onClick={() => setIsAddPageModalOpen(true)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#a1a1aa',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '11px',
-              }}
-            >
-              <Plus size={13} /> Add Page
-            </button>
+      <div style={{ display: 'grid', gridTemplateColumns: '270px minmax(0, 1fr) 340px', flex: 1, minHeight: 0 }}>
+        <aside style={{ borderRight: '1px solid #232328', background: '#101013', overflowY: 'auto' }}>
+          <div style={{ padding: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #202025' }}>
+            <strong style={{ fontSize: 11, color: '#9a9aa3' }}>PAGES</strong>
+            <button onClick={() => setShowAddPage(true)} style={{ background: 'transparent', border: 0, color: '#60a5fa', cursor: 'pointer', fontSize: 11 }}><Plus size={12} /> Page</button>
           </div>
-
-          {/* Page Tree List */}
-          <div style={{ padding: '8px' }}>
-            {project.pages.length === 0 ? (
-              <div style={{ padding: '24px 12px', textAlign: 'center', color: '#71717a', fontSize: '12px' }}>
-                <p style={{ margin: '0 0 10px 0' }}>No pages yet.</p>
-                <button
-                  className="primary-button"
-                  onClick={handlePlanSiteStructure}
-                  style={{ fontSize: '11px', padding: '6px 12px' }}
-                >
-                  Plan Architecture
-                </button>
-              </div>
-            ) : (
-              project.pages.map((p) => {
-                const isActive = p.id === currentPage?.id;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => {
-                      setSelectedPageId(p.id);
-                      if (p.sections.length > 0 && !p.sections.some((s) => s.id === selectedSectionId)) {
-                        setSelectedSectionId(p.sections[0].id);
-                      }
-                    }}
-                    style={{
-                      padding: '8px 10px',
-                      borderRadius: '4px',
-                      background: isActive ? '#1c1c21' : 'transparent',
-                      border: isActive ? '1px solid #2e2e36' : '1px solid transparent',
-                      marginBottom: '4px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: isActive ? 600 : 400, color: isActive ? '#ffffff' : '#d4d4d8' }}>
-                        {p.name}
+          <div style={{ padding: 8 }}>
+            {!project.pages.length && <button onClick={handlePlan} disabled={isPlanning} style={{ width: '100%', background: '#1d4ed8', color: '#fff', border: 0, padding: 8, borderRadius: 4, cursor: 'pointer' }}>{isPlanning ? 'Planning…' : 'Plan Site Structure'}</button>}
+            {project.pages.map((page) => (
+              <div key={page.id} style={{ marginBottom: 7 }}>
+                <div onClick={() => { setSelectedPageId(page.id); setSelectedSectionId(page.sections[0]?.id || null); }} style={{ padding: '8px 9px', background: currentPage?.id === page.id ? '#202938' : '#151519', border: `1px solid ${currentPage?.id === page.id ? '#355e9d' : '#25252a'}`, borderRadius: 4, cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span style={{ fontSize: 12, fontWeight: 600 }}>{page.name}</span><button onClick={(event) => { event.stopPropagation(); handleDeletePage(page.id); }} style={{ background: 'transparent', border: 0, color: '#7f7f88', cursor: 'pointer' }}><Trash2 size={11} /></button></div>
+                  <div style={{ fontSize: 10, color: '#6f6f78', marginTop: 2 }}>{page.slug}</div>
+                </div>
+                {currentPage?.id === page.id && <div style={{ marginTop: 6, paddingLeft: 5 }}>
+                  <button onClick={() => setShowAddSection(true)} style={{ width: '100%', background: 'transparent', border: '1px dashed #32323a', color: '#9a9aa3', padding: 6, borderRadius: 4, cursor: 'pointer', fontSize: 10 }}><Plus size={11} /> Add Section</button>
+                  {[...page.sections].sort((a, b) => a.order - b.order).map((section, index) => (
+                    <div key={section.id} onClick={() => setSelectedSectionId(section.id)} style={{ marginTop: 5, padding: '7px 7px', background: selectedSectionId === section.id ? '#19263a' : '#141417', border: `1px solid ${selectedSectionId === section.id ? '#315a96' : '#222228'}`, borderRadius: 4, cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{index + 1}. {section.name}</span>
+                        {sectionReady(section) ? <CheckCircle2 size={11} color={section.contentApproved ? '#22c55e' : '#60a5fa'} /> : <AlertTriangle size={11} color="#f59e0b" />}
                       </div>
-                      <div style={{ fontSize: '10px', color: '#71717a', fontFamily: 'monospace' }}>
-                        {p.slug} • {p.sections.length} sections
+                      <div onClick={(event) => event.stopPropagation()} style={{ display: 'flex', justifyContent: 'flex-end', gap: 3, marginTop: 4 }}>
+                        <button onClick={() => handleMove(section.id, -1)} disabled={index === 0} style={{ background: 'transparent', border: 0, color: '#81818b', cursor: 'pointer' }}><ArrowUp size={10} /></button>
+                        <button onClick={() => handleMove(section.id, 1)} disabled={index === page.sections.length - 1} style={{ background: 'transparent', border: 0, color: '#81818b', cursor: 'pointer' }}><ArrowDown size={10} /></button>
+                        <button onClick={() => handleDuplicateSection(section.id)} style={{ background: 'transparent', border: 0, color: '#81818b', cursor: 'pointer' }}><Copy size={10} /></button>
+                        <button onClick={() => handleRemoveSection(section.id)} style={{ background: 'transparent', border: 0, color: '#ef6464', cursor: 'pointer' }}><Trash2 size={10} /></button>
                       </div>
                     </div>
-                    {project.pages.length > 1 && (
-                      <button
-                        title="Delete page"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeletePage(p.id);
-                        }}
-                        style={{ background: 'transparent', border: 'none', color: '#52525b', cursor: 'pointer', padding: '4px' }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Section Outline Header */}
-          {currentPage && (
-            <>
-              <div
-                style={{
-                  padding: '12px 16px',
-                  borderTop: '1px solid #1f1f23',
-                  borderBottom: '1px solid #1f1f23',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: '#0d0d0f',
-                }}
-              >
-                <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#71717a' }}>
-                  {currentPage.name} Sections ({currentPage.sections.length})
-                </span>
-                <button
-                  onClick={() => setIsAddSectionModalOpen(true)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#3b82f6',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '11px',
-                    fontWeight: 500,
-                  }}
-                >
-                  <Plus size={13} /> Section
-                </button>
-              </div>
-
-              {/* Sections Ordered List */}
-              <div style={{ flex: 1, padding: '8px', overflowY: 'auto' }}>
-                {currentPage.sections.length === 0 ? (
-                  <div style={{ padding: '24px 12px', textAlign: 'center', color: '#71717a', fontSize: '12px' }}>
-                    No sections in this page. Click "+ Section" to insert one.
-                  </div>
-                ) : (
-                  currentPage.sections
-                    .slice()
-                    .sort((a, b) => a.order - b.order)
-                    .map((sec, idx) => {
-                      const isSelected = sec.id === selectedSectionId;
-                      const hasMissingFactual = sec.missingFactualFields && sec.missingFactualFields.length > 0;
-                      const hasMissingAsset = sec.missingAssetRequirements && sec.missingAssetRequirements.length > 0;
-
-                      return (
-                        <div
-                          key={sec.id}
-                          onClick={() => setSelectedSectionId(sec.id)}
-                          style={{
-                            padding: '8px 10px',
-                            borderRadius: '4px',
-                            background: isSelected ? '#1e293b' : '#141418',
-                            border: isSelected ? '1px solid #3b82f6' : '1px solid #222226',
-                            marginBottom: '6px',
-                            cursor: 'pointer',
-                            transition: 'all 0.1s ease',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '10px', color: '#71717a', fontFamily: 'monospace' }}>
-                                #{String(idx + 1).padStart(2, '0')}
-                              </span>
-                              <span style={{ fontSize: '12px', fontWeight: isSelected ? 600 : 500, color: isSelected ? '#ffffff' : '#e4e4e7' }}>
-                                {sec.name}
-                              </span>
-                            </div>
-
-                            {/* Status indicator icon */}
-                            {sec.contentStatus === 'ready' && !hasMissingAsset ? (
-                              <span title="Ready" style={{ display: 'inline-flex' }}>
-                                <CheckCircle2 size={12} style={{ color: '#22c55e' }} />
-                              </span>
-                            ) : hasMissingFactual || hasMissingAsset ? (
-                              <span title="Needs Input / Missing Asset" style={{ display: 'inline-flex' }}>
-                                <AlertTriangle size={12} style={{ color: '#f59e0b' }} />
-                              </span>
-                            ) : (
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#64748b' }} />
-                            )}
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace' }}>
-                              {sec.componentRegistryId}
-                            </span>
-
-                            {/* Reordering and remove controls */}
-                            <div style={{ display: 'flex', gap: '2px' }} onClick={(e) => e.stopPropagation()}>
-                              <button
-                                title="Move up"
-                                disabled={idx === 0}
-                                onClick={() => handleMoveSection(sec.id, 'up')}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: idx === 0 ? '#3f3f46' : '#a1a1aa',
-                                  cursor: idx === 0 ? 'default' : 'pointer',
-                                  padding: '2px',
-                                }}
-                              >
-                                <ArrowUp size={11} />
-                              </button>
-                              <button
-                                title="Move down"
-                                disabled={idx === currentPage.sections.length - 1}
-                                onClick={() => handleMoveSection(sec.id, 'down')}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: idx === currentPage.sections.length - 1 ? '#3f3f46' : '#a1a1aa',
-                                  cursor: idx === currentPage.sections.length - 1 ? 'default' : 'pointer',
-                                  padding: '2px',
-                                }}
-                              >
-                                <ArrowDown size={11} />
-                              </button>
-                              <button
-                                title="Duplicate"
-                                onClick={() => handleDuplicateSection(sec.id)}
-                                style={{ background: 'transparent', border: 'none', color: '#a1a1aa', cursor: 'pointer', padding: '2px' }}
-                              >
-                                <Copy size={11} />
-                              </button>
-                              <button
-                                title="Delete"
-                                onClick={() => handleRemoveSection(sec.id)}
-                                style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* ========================================================================= */}
-        {/* PANE 2: CENTER CANVAS (LIVE INTERACTIVE SITE PREVIEW)                     */}
-        {/* ========================================================================= */}
-        <div
-          className="pane-center-canvas"
-          style={{
-            flex: 1,
-            display: 'flex',
-            justifyContent: 'center',
-            background: '#0a0a0d',
-            overflowY: 'auto',
-            padding: viewport === 'desktop' ? '0' : '24px 16px',
-            position: 'relative',
-          }}
-          onClick={() => setSelectedSectionId(null)}
-        >
-          {currentPage ? (
-            <div
-              style={{
-                width: viewport === 'mobile' ? '375px' : viewport === 'tablet' ? '768px' : '100%',
-                maxWidth: '100%',
-                minHeight: '100%',
-                boxShadow: viewport === 'desktop' ? 'none' : '0 20px 40px rgba(0,0,0,0.6)',
-                border: viewport === 'desktop' ? 'none' : '1px solid #27272a',
-                transition: 'width 0.2s ease',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <StudioSiteRenderer
-                project={project}
-                page={currentPage}
-                contentMode="production"
-                previewMode={viewport}
-                themeMode={themeMode}
-                isBuilderMode={true}
-                selectedSectionId={selectedSectionId || undefined}
-                onSelectSection={(id) => setSelectedSectionId(id)}
-              />
-            </div>
-          ) : (
-            <div style={{ padding: '80px', textAlign: 'center', color: '#71717a' }}>
-              Select or create a page to preview.
-            </div>
-          )}
-        </div>
-
-        {/* ========================================================================= */}
-        {/* PANE 3: RIGHT SIDEBAR (SELECTED SECTION INSPECTOR)                        */}
-        {/* ========================================================================= */}
-        <div
-          className="pane-right-inspector"
-          style={{
-            width: '320px',
-            background: '#111114',
-            borderLeft: '1px solid #222226',
-            display: 'flex',
-            flexDirection: 'column',
-            overflowY: 'auto',
-          }}
-        >
-          {currentSection ? (
-            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Section Header */}
-              <div style={{ borderBottom: '1px solid #222226', paddingBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span className="eyebrow" style={{ margin: 0 }}>
-                    SECTION INSPECTOR
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      padding: '2px 6px',
-                      borderRadius: '3px',
-                      fontWeight: 600,
-                      background:
-                        currentSection.contentStatus === 'ready'
-                          ? 'rgba(34, 197, 94, 0.15)'
-                          : currentSection.contentStatus === 'invalid'
-                          ? 'rgba(239, 68, 68, 0.15)'
-                          : 'rgba(245, 158, 11, 0.15)',
-                      color:
-                        currentSection.contentStatus === 'ready'
-                          ? '#4ade80'
-                          : currentSection.contentStatus === 'invalid'
-                          ? '#f87171'
-                          : '#fbbf24',
-                    }}
-                  >
-                    {currentSection.contentStatus ? currentSection.contentStatus.toUpperCase() : 'NEEDS INPUT'}
-                  </span>
-                </div>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '4px 0 2px 0', color: '#f4f4f2' }}>
-                  {currentSection.name}
-                </h3>
-                <span style={{ fontSize: '11px', color: '#71717a', fontFamily: 'monospace' }}>
-                  {currentSection.componentRegistryId}
-                </span>
-              </div>
-
-              {/* Missing Factual Inputs Callout (Truthfulness Enforcement) */}
-              {currentSection.missingFactualFields && currentSection.missingFactualFields.length > 0 && (
-                <div
-                  style={{
-                    background: '#1c170d',
-                    border: '1px solid #78350f',
-                    padding: '10px 12px',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fbbf24', fontWeight: 600, marginBottom: '4px' }}>
-                    <AlertTriangle size={14} />
-                    <span>Factual Input Required</span>
-                  </div>
-                  <p style={{ margin: '0 0 6px 0', color: '#d4d4d8', fontSize: '11px', lineHeight: 1.5 }}>
-                    In production mode, Gemini does NOT fabricate fake statistics, unverified ratings, or unverified claims.
-                    Please provide truthful data for:
-                  </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {currentSection.missingFactualFields.map((field) => (
-                      <span
-                        key={field}
-                        style={{
-                          background: '#2e1f0e',
-                          color: '#fcd34d',
-                          border: '1px solid #b45309',
-                          padding: '1px 6px',
-                          borderRadius: '2px',
-                          fontSize: '10px',
-                          fontFamily: 'monospace',
-                        }}
-                      >
-                        {field}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Missing Asset Warning */}
-              {currentSection.missingAssetRequirements && currentSection.missingAssetRequirements.length > 0 && (
-                <div
-                  style={{
-                    background: '#1f1313',
-                    border: '1px solid #7f1d1d',
-                    padding: '10px 12px',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171', fontWeight: 600, marginBottom: '4px' }}>
-                    <ImageIcon size={14} />
-                    <span>Required Asset Missing</span>
-                  </div>
-                  <p style={{ margin: 0, color: '#fca5a5', fontSize: '11px' }}>
-                    Slots: {currentSection.missingAssetRequirements.join(', ')}. Generate or bind assets in the Asset Library.
-                  </p>
-                </div>
-              )}
-
-              {/* Quick Actions */}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  className="secondary-button"
-                  onClick={handleRegenerateSectionCopy}
-                  disabled={isRegeneratingSection}
-                  style={{
-                    flex: 1,
-                    fontSize: '11px',
-                    padding: '6px 10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <RefreshCw size={12} className={isRegeneratingSection ? 'animate-spin' : ''} />
-                  <span>{isRegeneratingSection ? 'Regenerating...' : 'Regenerate Copy'}</span>
-                </button>
-
-                <button
-                  className="secondary-button"
-                  onClick={() => {
-                    handleUpdateSectionField('_approved', true);
-                  }}
-                  style={{
-                    fontSize: '11px',
-                    padding: '6px 10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    color: '#22c55e',
-                  }}
-                >
-                  <Check size={12} />
-                  <span>Approve</span>
-                </button>
-              </div>
-
-              {/* Component Replacement Dropdown (CANONICAL APPROVED ONLY) */}
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#a1a1aa', marginBottom: '6px' }}>
-                  REPLACE COMPONENT (CANONICAL ONLY)
-                </label>
-                <select
-                  value={currentSection.componentRegistryId}
-                  onChange={(e) => handleReplaceComponent(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: '#18181c',
-                    color: '#e4e4e7',
-                    border: '1px solid #27272a',
-                    padding: '6px 8px',
-                    fontSize: '12px',
-                    borderRadius: '4px',
-                  }}
-                >
-                  {compatibleReplacementOptions.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      [{c.category.toUpperCase()}] {c.name}
-                    </option>
                   ))}
-                </select>
-                <span style={{ display: 'block', fontSize: '10px', color: '#71717a', marginTop: '4px' }}>
-                  Only approved components with verified implementations can be selected.
-                </span>
+                </div>}
               </div>
+            ))}
+          </div>
+        </aside>
 
-              {/* Motion Preset Selector (Section 10) */}
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#a1a1aa', marginBottom: '6px' }}>
-                  MOTION PRESET (IMPLEMENTED)
-                </label>
-                <select
-                  value={currentSection.motionPreset || 'fadeSettle'}
-                  onChange={(e) => handleUpdateMotionPreset(e.target.value as StudioMotionPreset)}
-                  style={{
-                    width: '100%',
-                    background: '#18181c',
-                    color: '#e4e4e7',
-                    border: '1px solid #27272a',
-                    padding: '6px 8px',
-                    fontSize: '12px',
-                    borderRadius: '4px',
-                  }}
-                >
-                  <option value="none">None (Reduced Motion)</option>
-                  <option value="fadeSettle">Fade Settle (Balanced)</option>
-                  <option value="fadeSlideUp">Fade Slide Up (Editorial)</option>
-                  <option value="cinematicReveal">Cinematic Reveal (Restrained)</option>
-                </select>
-              </div>
+        <main style={{ background: '#08080a', overflow: 'auto', padding: viewport === 'desktop' ? 0 : 20, display: 'flex', justifyContent: 'center' }} onClick={() => setSelectedSectionId(null)}>
+          {currentPage ? <div onClick={(event) => event.stopPropagation()} style={{ width: viewport === 'mobile' ? 375 : viewport === 'tablet' ? 768 : '100%', maxWidth: '100%', minHeight: '100%', background: '#111' }}>
+            <StudioSiteRenderer project={project} page={currentPage} contentMode="production" previewMode={viewport} themeMode={themeMode} isBuilderMode selectedSectionId={selectedSectionId || undefined} onSelectSection={setSelectedSectionId} />
+          </div> : <div style={{ margin: 'auto', color: '#71717a' }}>Plan or create a page to begin.</div>}
+        </main>
 
-              {/* Content Editor: Key Fields */}
-              <div style={{ borderTop: '1px solid #222226', paddingTop: '12px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#a1a1aa', marginBottom: '8px' }}>
-                  CONTENT FIELDS (MANUAL EDIT)
-                </label>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {Object.entries(currentSection.content || {}).map(([key, val]) => {
-                    if (key.startsWith('_')) return null;
-                    const isPrimitive = typeof val === 'string' || typeof val === 'number';
-
-                    if (!isPrimitive) return null;
-
-                    return (
-                      <div key={key}>
-                        <label style={{ display: 'block', fontSize: '11px', color: '#9d9da5', marginBottom: '3px' }}>
-                          {key}
-                        </label>
-                        <input
-                          type="text"
-                          value={String(val ?? '')}
-                          onChange={(e) => handleUpdateSectionField(key, e.target.value)}
-                          style={{
-                            width: '100%',
-                            background: '#18181c',
-                            color: '#ffffff',
-                            border: '1px solid #27272a',
-                            padding: '5px 8px',
-                            fontSize: '12px',
-                            borderRadius: '3px',
-                            boxSizing: 'border-box',
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+        <aside style={{ borderLeft: '1px solid #232328', background: '#101013', overflowY: 'auto', padding: 14 }}>
+          {!currentSection ? <div style={{ padding: 28, textAlign: 'center', color: '#71717a', fontSize: 12 }}><Layers size={24} /><p>Select a section to edit.</p></div> : <>
+            <div style={{ borderBottom: '1px solid #25252a', paddingBottom: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#71717a', letterSpacing: '.07em' }}>SECTION INSPECTOR</div>
+              <h3 style={{ margin: '5px 0 2px', fontSize: 14 }}>{currentSection.name}</h3>
+              <div style={{ fontSize: 10, color: '#686871', fontFamily: 'monospace' }}>{currentSection.componentRegistryId}</div>
             </div>
-          ) : (
-            <div style={{ padding: '32px 16px', textAlign: 'center', color: '#71717a', fontSize: '12px' }}>
-              <Layers size={28} strokeWidth={1.2} style={{ marginBottom: '8px', color: '#52525b' }} />
-              <p style={{ margin: '0 0 4px 0', fontWeight: 500, color: '#a1a1aa' }}>No Section Selected</p>
-              <p style={{ margin: 0 }}>Click any section in the outline or on the canvas to inspect and edit.</p>
+
+            {!sectionReady(currentSection) && <div style={{ background: '#21190d', border: '1px solid #69430c', color: '#fbbf24', padding: 9, borderRadius: 4, fontSize: 11, marginBottom: 12 }}>
+              <strong>Needs input</strong>
+              {!!currentSection.missingFactualFields?.length && <div style={{ marginTop: 4 }}>Facts: {currentSection.missingFactualFields.join(', ')}</div>}
+              {!!currentSection.missingAssetRequirements?.length && <div style={{ marginTop: 4 }}>Assets: {currentSection.missingAssetRequirements.join(', ')}</div>}
+            </div>}
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <button onClick={handleRegenerate} disabled={isRegenerating} style={{ flex: 1, border: '1px solid #303038', background: '#19191e', color: '#d4d4d8', borderRadius: 4, padding: 7, cursor: 'pointer', fontSize: 10 }}><RefreshCw size={11} /> {isRegenerating ? 'Working…' : 'Regenerate Copy'}</button>
+              <button onClick={handleApprove} disabled={!canApprove} style={{ border: '1px solid #304a37', background: currentSection.contentApproved ? '#16321f' : '#18251c', color: canApprove ? '#4ade80' : '#666', borderRadius: 4, padding: '7px 9px', cursor: canApprove ? 'pointer' : 'not-allowed', fontSize: 10 }}><Check size={11} /> {currentSection.contentApproved ? 'Approved' : 'Approve'}</button>
             </div>
-          )}
-        </div>
+
+            {currentDefinition && <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 10, color: '#85858e', marginBottom: 4 }}>COMPONENT</label>
+              <select value={currentSection.componentRegistryId} onChange={(event) => handleReplace(event.target.value)} style={{ width: '100%', background: '#17171b', color: '#e4e4e7', border: '1px solid #2b2b31', borderRadius: 4, padding: 7, fontSize: 11 }}>
+                {replacementOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              <div style={{ marginTop: 3, color: '#666670', fontSize: 9 }}>Only approved, renderable, contract-backed components in the same category.</div>
+            </div>}
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 10, color: '#85858e', marginBottom: 4 }}>MOTION</label>
+              <select value={normalizeStudioMotionPreset(currentSection.motionPreset)} onChange={(event) => handleMotion(event.target.value as StudioMotionPreset)} style={{ width: '100%', background: '#17171b', color: '#e4e4e7', border: '1px solid #2b2b31', borderRadius: 4, padding: 7, fontSize: 11 }}>
+                {STUDIO_MOTION_PRESETS.map((preset) => <option key={preset} value={preset}>{preset}</option>)}
+              </select>
+            </div>
+
+            {!!currentContract?.generatedCopyFields.length && <div style={{ borderTop: '1px solid #25252a', paddingTop: 12, marginTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#85858e', marginBottom: 7 }}>GENERATIVE COPY</div>
+              {currentContract.generatedCopyFields.map((field) => {
+                const value = currentSection.content[field];
+                const complex = value !== undefined && value !== null && typeof value === 'object';
+                return <div key={`${currentSection.id}-${field}`} style={{ marginBottom: 8 }}>
+                  <label style={{ display: 'block', fontSize: 10, color: '#7d7d86', marginBottom: 3 }}>{field}</label>
+                  {complex ? <textarea defaultValue={JSON.stringify(value, null, 2)} onBlur={(event) => { try { handleGeneratedField(field, JSON.parse(event.currentTarget.value)); } catch { setMessage(`Invalid JSON for ${field}.`); } }} style={{ width: '100%', minHeight: 76, boxSizing: 'border-box', background: '#151519', color: '#e4e4e7', border: '1px solid #292930', borderRadius: 4, padding: 7, fontFamily: 'monospace', fontSize: 10 }} /> : <textarea value={String(value ?? '')} onChange={(event) => handleGeneratedField(field, event.target.value)} style={{ width: '100%', minHeight: 54, boxSizing: 'border-box', background: '#151519', color: '#e4e4e7', border: '1px solid #292930', borderRadius: 4, padding: 7, fontSize: 11 }} />}
+                </div>;
+              })}
+            </div>}
+
+            {!!currentContract?.factualClaimFields.length && <div style={{ borderTop: '1px solid #25252a', paddingTop: 12, marginTop: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div><div style={{ fontSize: 10, fontWeight: 700, color: '#85858e' }}>VERIFIED FACT FIELDS</div><div style={{ marginTop: 4, fontSize: 9, color: '#666670' }}>{currentContract.factualClaimFields.join(', ')}</div></div>
+                <button onClick={() => setShowFacts(true)} style={{ border: '1px solid #314159', background: '#162033', color: '#93c5fd', borderRadius: 4, padding: '5px 7px', cursor: 'pointer', fontSize: 9 }}>Edit Facts</button>
+              </div>
+            </div>}
+
+            {!!currentContract?.assetSlots.length && <div style={{ borderTop: '1px solid #25252a', paddingTop: 12, marginTop: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}><span style={{ fontSize: 10, fontWeight: 700, color: '#85858e' }}>ASSET SLOTS</span>{onProceedToAssets && <button onClick={onProceedToAssets} style={{ border: 0, background: 'transparent', color: '#60a5fa', cursor: 'pointer', fontSize: 9 }}>Open Assets →</button>}</div>
+              {currentContract.assetSlots.map((slot) => {
+                const options = eligibleAssets.filter((asset) => asset.aspectRatio === slot.aspectRatio);
+                return <div key={slot.slot} style={{ marginBottom: 8 }}>
+                  <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#7d7d86', marginBottom: 3 }}><span>{slot.slot}{slot.required ? ' *' : ''}</span><span>{slot.aspectRatio}</span></label>
+                  <select value={currentSection.assetBindings?.[slot.slot] || ''} onChange={(event) => handleAssetBinding(slot.slot, event.target.value)} style={{ width: '100%', background: '#151519', color: '#e4e4e7', border: '1px solid #292930', borderRadius: 4, padding: 6, fontSize: 10 }}>
+                    <option value="">{slot.required ? 'Select required asset…' : 'None'}</option>
+                    {options.map((asset) => <option key={asset.id} value={asset.id}>{asset.status === 'approved' ? '✓ ' : ''}{asset.purpose || asset.id}</option>)}
+                  </select>
+                </div>;
+              })}
+              {!eligibleAssets.length && <div style={{ color: '#f59e0b', fontSize: 9 }}><ImageIcon size={10} /> No generated/approved assets are available yet.</div>}
+            </div>}
+          </>}
+        </aside>
       </div>
 
-      {/* MODAL: ADD PAGE */}
-      {isAddPageModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
-        >
-          <div
-            style={{
-              width: '400px',
-              background: '#141418',
-              border: '1px solid #27272a',
-              borderRadius: '6px',
-              padding: '24px',
-            }}
-          >
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600, color: '#ffffff' }}>Add New Page</h3>
+      {showFacts && <ProjectFactsEditor project={project} onUpdateProject={(updated) => { onUpdateProject(updated); setMessage('Verified facts saved. Recompose affected sections to apply them.'); }} onClose={() => setShowFacts(false)} />}
 
-            {pageError && (
-              <div style={{ background: '#2e1313', color: '#f87171', padding: '8px 10px', fontSize: '12px', borderRadius: '4px', marginBottom: '12px' }}>
-                {pageError}
-              </div>
-            )}
-
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: '#a1a1aa', marginBottom: '4px' }}>
-                Page Name
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Services, About, Portfolio"
-                value={newPageName}
-                onChange={(e) => {
-                  setNewPageName(e.target.value);
-                  if (!newPageSlug) {
-                    setNewPageSlug(`/${e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
-                  }
-                }}
-                style={{
-                  width: '100%',
-                  background: '#1a1a20',
-                  border: '1px solid #2e2e36',
-                  color: '#fff',
-                  padding: '8px 10px',
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: '#a1a1aa', marginBottom: '4px' }}>
-                URL Slug
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. /services"
-                value={newPageSlug}
-                onChange={(e) => setNewPageSlug(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: '#1a1a20',
-                  border: '1px solid #2e2e36',
-                  color: '#fff',
-                  padding: '8px 10px',
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  fontFamily: 'monospace',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button
-                className="secondary-button"
-                onClick={() => {
-                  setIsAddPageModalOpen(false);
-                  setPageError(null);
-                }}
-              >
-                Cancel
-              </button>
-              <button className="primary-button" onClick={handleAddPage}>
-                Create Page
-              </button>
-            </div>
-          </div>
+      {showAddPage && <div style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 390, background: '#141418', border: '1px solid #2b2b31', borderRadius: 7, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><h3 style={{ margin: 0, fontSize: 15 }}>Add Page</h3><button onClick={() => setShowAddPage(false)} style={{ background: 'transparent', border: 0, color: '#aaa', cursor: 'pointer' }}><X size={15} /></button></div>
+          {pageError && <div style={{ marginTop: 10, padding: 7, background: '#311616', color: '#fca5a5', fontSize: 11 }}>{pageError}</div>}
+          <input value={newPageName} onChange={(event) => { setNewPageName(event.target.value); setPageError(null); }} placeholder="Page name (Hebrew supported)" style={{ width: '100%', boxSizing: 'border-box', marginTop: 12, background: '#19191e', border: '1px solid #303038', color: '#fff', padding: 8, borderRadius: 4 }} />
+          <input value={newPageSlug} onChange={(event) => setNewPageSlug(event.target.value)} placeholder="Optional ASCII slug, e.g. /services" style={{ width: '100%', boxSizing: 'border-box', marginTop: 8, background: '#19191e', border: '1px solid #303038', color: '#fff', padding: 8, borderRadius: 4 }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 7, marginTop: 14 }}><button onClick={() => setShowAddPage(false)} style={{ background: '#202025', color: '#bbb', border: '1px solid #303038', padding: '7px 10px', borderRadius: 4 }}>Cancel</button><button onClick={handleAddPage} style={{ background: '#2563eb', color: '#fff', border: 0, padding: '7px 11px', borderRadius: 4 }}>Create</button></div>
         </div>
-      )}
+      </div>}
 
-      {/* MODAL: ADD SECTION */}
-      {isAddSectionModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
-        >
-          <div
-            style={{
-              width: '540px',
-              maxHeight: '80vh',
-              background: '#141418',
-              border: '1px solid #27272a',
-              borderRadius: '6px',
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#ffffff' }}>Add Approved Section</h3>
-                <span style={{ fontSize: '12px', color: '#71717a' }}>Only canonically approved registry components</span>
-              </div>
-              <button
-                onClick={() => setIsAddSectionModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer' }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
-              {approvedComponents
-                .filter((c) => {
-                  if (isRtl && c.rtlReady === false) return false;
-                  if (c.category === 'ecommerce' && project.projectType !== 'shopify') return false;
-                  return true;
-                })
-                .map((comp) => (
-                  <div
-                    key={comp.id}
-                    onClick={() => handleAddSection(comp.id)}
-                    style={{
-                      background: '#1a1a20',
-                      border: '1px solid #27272a',
-                      borderRadius: '4px',
-                      padding: '10px 14px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      transition: 'border-color 0.15s ease',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#3b82f6')}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#27272a')}
-                  >
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#f4f4f2', marginBottom: '2px' }}>
-                        {comp.name}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#8e8e93' }}>
-                        {comp.description || `Category: ${comp.category}`}
-                      </div>
-                    </div>
-                    <span
-                      style={{
-                        fontSize: '10px',
-                        textTransform: 'uppercase',
-                        padding: '2px 6px',
-                        borderRadius: '3px',
-                        background: '#27272a',
-                        color: '#a1a1aa',
-                      }}
-                    >
-                      {comp.category}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </div>
+      {showAddSection && <div style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 560, maxHeight: '78vh', overflow: 'auto', background: '#141418', border: '1px solid #2b2b31', borderRadius: 7, padding: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><div><h3 style={{ margin: 0, fontSize: 15 }}>Add Approved Component</h3><div style={{ fontSize: 10, color: '#71717a', marginTop: 3 }}>Canonical, compatible and contract-backed only.</div></div><button onClick={() => setShowAddSection(false)} style={{ background: 'transparent', border: 0, color: '#aaa', cursor: 'pointer' }}><X size={15} /></button></div>
+          {eligibleComponents.map((component) => <button key={component.id} onClick={() => handleAddSection(component.id)} style={{ display: 'block', width: '100%', textAlign: 'left', background: '#19191e', color: '#e4e4e7', border: '1px solid #292930', borderRadius: 4, padding: '9px 10px', marginBottom: 6, cursor: 'pointer' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong style={{ fontSize: 11 }}>{component.name}</strong><span style={{ fontSize: 9, color: '#71717a' }}>{component.category}</span></div><div style={{ marginTop: 3, fontSize: 9, color: '#777780' }}>{component.description}</div></button>)}
         </div>
-      )}
+      </div>}
     </div>
   );
 }
