@@ -1,27 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowRight,
   Blocks,
-  Box,
-  ChevronRight,
   FolderKanban,
   Image as ImageIcon,
   MonitorSmartphone,
-  PackageOpen,
   Plus,
   Settings,
   ShoppingBag,
   Sparkles,
-  CheckCircle2,
-  ExternalLink,
-  Layers,
-  ShieldCheck,
-  ArrowRight,
-  Globe,
-  Sliders,
 } from 'lucide-react';
-import { demoComponents } from '@shared/componentRegistry';
 import { createEmptyProject, type Project, type ProjectType } from '@shared/project';
-import { exporters } from '@shared/exporters';
 import { projectRepository } from './data/projectRepository';
 import { BriefEditor } from './components/BriefEditor';
 import { DesignWorkspace } from './components/DesignWorkspace';
@@ -32,6 +21,7 @@ import { NewProjectModal } from './components/NewProjectModal';
 import { BuildWorkspace } from './components/BuildWorkspace';
 import { SitePreviewView } from './components/SitePreviewView';
 import { StandalonePreviewView } from './components/StandalonePreviewView';
+import { HandoffView } from './components/HandoffView';
 
 const navItems = [
   { label: 'Projects', icon: FolderKanban },
@@ -44,37 +34,28 @@ const navItems = [
 const workspaceTabs = ['Brief', 'Strategy', 'Design', 'Assets', 'Build', 'Preview', 'Review', 'Handoff'];
 
 export default function App() {
-  // Check if current route is standalone preview
   const isStandalonePreview = typeof window !== 'undefined' && window.location.pathname.startsWith('/studio-preview');
-  if (isStandalonePreview) {
-    return <StandalonePreviewView />;
-  }
+  if (isStandalonePreview) return <StandalonePreviewView />;
 
   const [activeNav, setActiveNav] = useState('Projects');
   const [activeTab, setActiveTab] = useState('Brief');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [project, setProject] = useState<Project>(() => createEmptyProject('demo-project', 'business_website', 'Atelier Kanso Architecture'));
 
-  // Initialize or load project
-  const [project, setProject] = useState<Project>(() => {
-    return createEmptyProject('demo-project', 'business_website', 'Atelier Kanso Architecture');
-  });
-
-  // Load latest project from repository on mount
   useEffect(() => {
+    let cancelled = false;
     async function loadProjects() {
       try {
         const list = await projectRepository.list();
-        if (list.length > 0) {
-          setProject(list[0]);
-        } else {
-          // Save default project
-          await projectRepository.save(project);
-        }
+        if (cancelled) return;
+        if (list.length > 0) setProject(list[0]);
+        else await projectRepository.save(project);
       } catch {
-        // Fallback gracefully
+        // Local project remains usable if persistence is unavailable.
       }
     }
     loadProjects();
+    return () => { cancelled = true; };
   }, []);
 
   const handleUpdateProject = (updated: Project) => {
@@ -82,409 +63,153 @@ export default function App() {
     projectRepository.save(updated).catch(console.error);
   };
 
-  const handleCreateProject = (newProj: Project) => {
-    setProject(newProj);
+  const handleCreateProject = (newProject: Project) => {
+    setProject(newProject);
+    setActiveNav('Projects');
     setActiveTab('Brief');
-    projectRepository.save(newProj).catch(console.error);
+    projectRepository.save(newProject).catch(console.error);
   };
 
   const setProjectType = (type: ProjectType) => {
-    const updated: Project = {
-      ...project,
-      projectType: type,
-      updatedAt: new Date().toISOString(),
-    };
-    handleUpdateProject(updated);
+    handleUpdateProject({ ...project, projectType: type, updatedAt: new Date().toISOString() });
   };
 
-  const availableExporters = exporters.filter((exporter) => exporter.canExport(project));
-
-  // Determine pipeline steps completion
   const pipelineSteps = useMemo(() => {
+    const sections = project.pages.flatMap((page) => page.sections);
     const hasBrief = Boolean(project.business.businessName && project.business.description);
-    const hasReferences = Boolean(project.brand.referenceAnalyses && project.brand.referenceAnalyses.length > 0);
+    const hasReferences = Boolean(project.brand.referenceAnalyses?.length);
     const hasArtDirection = Boolean(project.designSystem.artDirection);
-    const hasComponentPlan = Boolean(project.pages.length > 0 && project.pages.some((p) => p.sections.length > 0));
-    const hasAssetPlan = Boolean(project.assets && project.assets.length > 0);
-    const hasCritic = project.status === 'review' || hasComponentPlan;
-    const hasHandoff = project.status === 'exported' || project.status === 'approved';
-
+    const hasComponentPlan = sections.length > 0;
+    const hasAssetPlan = project.assets.length > 0;
+    const contentReady = hasComponentPlan && sections.every((section) => section.contentStatus === 'ready' && !section.missingFactualFields?.length && !section.missingAssetRequirements?.length);
+    const hasHandoff = project.status === 'exported';
     return [
       { name: 'Strategic Brief', completed: hasBrief },
       { name: 'Reference Analysis', completed: hasReferences },
       { name: 'Art Direction', completed: hasArtDirection },
-      { name: '3 Design Directions', completed: hasArtDirection },
-      { name: 'Direction Approval', completed: hasArtDirection },
       { name: 'Component Selection', completed: hasComponentPlan },
       { name: 'Asset Manifest Plan', completed: hasAssetPlan },
-      { name: 'Design Critic Inspection', completed: hasCritic },
+      { name: 'Production Content', completed: contentReady },
+      { name: 'Design Review', completed: project.status === 'review' || project.status === 'approved' || project.status === 'exported' },
       { name: 'Handoff Export', completed: hasHandoff },
     ];
   }, [project]);
+
+  const renderSettings = () => (
+    <section className="workspace-card">
+      <div className="canvas-main" style={{ padding: 36, maxWidth: 820 }}>
+        <div className="section-intro">
+          <div>
+            <span className="eyebrow">ENVIRONMENT & ENGINE</span>
+            <h2>Studio Architecture Settings</h2>
+            <p className="section-description">Server-side Gemini orchestration, governed component rendering and validated multi-platform exports.</p>
+          </div>
+        </div>
+        <div className="form-card">
+          <div className="card-header-line"><Sparkles size={16} /><h3>Engine Configuration</h3></div>
+          <div className="detail-item"><span className="detail-label">Image model</span><p><code className="code-pill">gemini-3.1-flash-image</code> via server-side proxy</p></div>
+          <div className="detail-item"><span className="detail-label">Persistence</span><p>Local repository with optional Firebase abstraction</p></div>
+          <div className="detail-item"><span className="detail-label">Direction</span><p>LTR and first-class RTL rendering</p></div>
+          <div className="detail-item"><span className="detail-label">Delivery</span><p>React source ZIP, WordPress theme ZIP, Shopify Online Store 2.0 ZIP</p></div>
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
           <div className="brand-mark">N</div>
-          <div>
-            <div className="brand-name">Natanel Studio</div>
-            <div className="brand-subtitle">Website operating system</div>
-          </div>
+          <div><div className="brand-name">Natanel Studio</div><div className="brand-subtitle">Website operating system</div></div>
         </div>
-
         <nav className="sidebar-nav">
           {navItems.map(({ label, icon: Icon }) => (
-            <button
-              key={label}
-              className={`nav-button ${activeNav === label ? 'active' : ''}`}
-              onClick={() => setActiveNav(label)}
-            >
-              <Icon size={18} strokeWidth={1.6} />
-              <span>{label}</span>
+            <button key={label} className={`nav-button ${activeNav === label ? 'active' : ''}`} onClick={() => setActiveNav(label)}>
+              <Icon size={18} strokeWidth={1.6} /><span>{label}</span>
             </button>
           ))}
         </nav>
-
-        <div className="sidebar-footer">
-          <div className="status-dot" />
-          <span>Private workspace • Node 22</span>
-        </div>
+        <div className="sidebar-footer"><div className="status-dot" /><span>Private workspace • Node 22</span></div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
-          <div>
-            <div className="eyebrow">DESIGN BRAIN V1</div>
-            <h1>Build sites with taste, not templates.</h1>
-          </div>
-          <button className="primary-button" onClick={() => setIsNewProjectModalOpen(true)}>
-            <Plus size={17} /> New project
-          </button>
+          <div><div className="eyebrow">NATANEL STUDIO</div><h1>Build sites with taste, not templates.</h1></div>
+          <button className="primary-button" onClick={() => setIsNewProjectModalOpen(true)}><Plus size={17} /> New project</button>
         </header>
 
-        {/* View switching based on activeNav */}
         {activeNav === 'Component Sandbox' ? (
-          <section className="workspace-card">
-            <div className="canvas-main" style={{ padding: '32px' }}>
-              <ComponentSandboxView />
-            </div>
-          </section>
+          <section className="workspace-card"><div className="canvas-main" style={{ padding: 32 }}><ComponentSandboxView /></div></section>
         ) : activeNav === 'Component Library' ? (
-          <section className="workspace-card">
-            <div className="canvas-main" style={{ padding: '32px' }}>
-              <ComponentLibraryView />
-            </div>
-          </section>
+          <section className="workspace-card"><div className="canvas-main" style={{ padding: 32 }}><ComponentLibraryView /></div></section>
         ) : activeNav === 'Asset Library' ? (
-          <section className="workspace-card">
-            <div className="canvas-main" style={{ padding: '32px' }}>
-              <AssetPlannerView project={project} onUpdateProject={handleUpdateProject} />
-            </div>
-          </section>
-        ) : activeNav === 'Settings' ? (
-          <section className="workspace-card">
-            <div className="canvas-main" style={{ padding: '36px', maxWidth: '820px' }}>
-              <div className="section-intro">
-                <div>
-                  <span className="eyebrow">ENVIRONMENT & ENGINE</span>
-                  <h2>Studio Architecture Settings</h2>
-                  <p className="section-description">
-                    Server-side AI orchestration running on Gemini with native image synthesis and multi-platform handoff.
-                  </p>
-                </div>
-              </div>
-
-              <div className="form-card">
-                <div className="card-header-line">
-                  <Sparkles size={16} />
-                  <h3>AI Engine Configuration</h3>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Default Image Synthesis Model</span>
-                  <p><code className="code-pill">gemini-3.1-flash-image</code> (Nano Banana 2, Server-side proxy)</p>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Reasoning & Art Director Engine</span>
-                  <p><code className="code-pill">gemini-2.5-flash</code> with heuristic fallback guarantee</p>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Persistence Mode</span>
-                  <p>Local Repository (Browser-safe storage with Firestore abstraction layer)</p>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">RTL Support</span>
-                  <p>First-class Hebrew & Arabic directional layout with typography and component mirroring</p>
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : (
-          /* Main Projects Workspace */
+          <section className="workspace-card"><div className="canvas-main" style={{ padding: 32 }}><AssetPlannerView project={project} onUpdateProject={handleUpdateProject} /></div></section>
+        ) : activeNav === 'Settings' ? renderSettings() : (
           <section className="workspace-card">
             <div className="workspace-header">
               <div>
                 <div className="workspace-title-row">
-                  <span className="project-dot" />
-                  <strong>{project.name}</strong>
-                  <span className="status-pill status-approved">{project.status}</span>
-                  {project.business.direction === 'rtl' && (
-                    <span className="status-pill" style={{ borderColor: '#d6a84f', color: '#d6a84f' }}>
-                      RTL HEBREW
-                    </span>
-                  )}
+                  <span className="project-dot" /><strong>{project.name}</strong><span className="status-pill status-approved">{project.status}</span>
+                  {project.business.direction === 'rtl' && <span className="status-pill" style={{ borderColor: '#d6a84f', color: '#d6a84f' }}>RTL</span>}
                 </div>
-                <div className="muted">
-                  Platform-neutral until handoff • {project.business.industry || 'Architecture & Design'}
-                </div>
+                <div className="muted">Platform-neutral until handoff • {project.business.industry || 'Business website'}</div>
               </div>
-
               <div className="segmented-control">
-                <button
-                  className={project.projectType === 'business_website' ? 'selected' : ''}
-                  onClick={() => setProjectType('business_website')}
-                >
-                  <MonitorSmartphone size={16} /> Business Website
-                </button>
-                <button
-                  className={project.projectType === 'shopify' ? 'selected' : ''}
-                  onClick={() => setProjectType('shopify')}
-                >
-                  <ShoppingBag size={16} /> Shopify Store
-                </button>
+                <button className={project.projectType === 'business_website' ? 'selected' : ''} onClick={() => setProjectType('business_website')}><MonitorSmartphone size={16} /> Business Website</button>
+                <button className={project.projectType === 'shopify' ? 'selected' : ''} onClick={() => setProjectType('shopify')}><ShoppingBag size={16} /> Shopify Store</button>
               </div>
             </div>
 
             <div className="tabs">
-              {workspaceTabs.map((tab) => (
-                <button
-                  key={tab}
-                  className={activeTab === tab ? 'active' : ''}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab}
-                </button>
-              ))}
+              {workspaceTabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}
             </div>
 
             <div className="canvas">
               <div className="canvas-main">
-                {/* 1. BRIEF TAB */}
-                {activeTab === 'Brief' && (
-                  <BriefEditor
-                    project={project}
-                    onUpdate={handleUpdateProject}
-                    onProceedToDesign={() => setActiveTab('Design')}
-                  />
-                )}
+                {activeTab === 'Brief' && <BriefEditor project={project} onUpdate={handleUpdateProject} onProceedToDesign={() => setActiveTab('Design')} />}
 
-                {/* 2. STRATEGY TAB */}
                 {activeTab === 'Strategy' && (
                   <div className="strategy-view">
-                    <div className="section-intro">
-                      <div>
-                        <span className="eyebrow">STAGE 01.2 / STRATEGY</span>
-                        <h2>Conversion Funnel & Positioning Framework</h2>
-                        <p className="section-description">
-                          Strategic alignment for {project.business.businessName || 'the studio'}. Defines the primary
-                          conversion pathway and audience expectations.
-                        </p>
-                      </div>
-                      <button className="primary-button" onClick={() => setActiveTab('Design')}>
-                        Proceed to Design <ArrowRight size={14} />
-                      </button>
-                    </div>
-
+                    <div className="section-intro"><div><span className="eyebrow">STRATEGY</span><h2>Conversion Funnel & Positioning</h2><p className="section-description">Keep positioning, audience, goals and required pages aligned before visual composition.</p></div><button className="primary-button" onClick={() => setActiveTab('Design')}>Proceed to Design <ArrowRight size={14} /></button></div>
                     <div className="form-grid">
-                      <div className="form-card">
-                        <div className="card-header-line">
-                          <h3>Core Positioning</h3>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Business Objective</span>
-                          <p>{project.business.description || 'Define in Brief tab'}</p>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Target Audience</span>
-                          <p>{project.business.targetAudience || 'Discerning clientele and enterprise partners'}</p>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Primary Conversion Goal</span>
-                          <p>{project.business.primaryGoal || 'High-trust qualified inquiry'}</p>
-                        </div>
-                      </div>
-
-                      <div className="form-card">
-                        <div className="card-header-line">
-                          <h3>Content Cadence & Density</h3>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Density Setting</span>
-                          <p style={{ textTransform: 'capitalize' }}>{project.brand.contentDensity} spacing</p>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">RTL First-Class Status</span>
-                          <p>{project.business.direction === 'rtl' ? 'Active (Hebrew layout mirroring)' : 'LTR Standard'}</p>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Visual Foundation</span>
-                          <p>{project.brand.colors.join(', ') || '#0d0d0f, #161619, #e8e6e1'}</p>
-                        </div>
-                      </div>
+                      <div className="form-card"><div className="card-header-line"><h3>Positioning</h3></div><div className="detail-item"><span className="detail-label">Business</span><p>{project.business.description || 'Define in Brief'}</p></div><div className="detail-item"><span className="detail-label">Audience</span><p>{project.business.targetAudience || 'Define in Brief'}</p></div><div className="detail-item"><span className="detail-label">Primary Goal</span><p>{project.business.primaryGoal || 'Define in Brief'}</p></div></div>
+                      <div className="form-card"><div className="card-header-line"><h3>Delivery Context</h3></div><div className="detail-item"><span className="detail-label">Direction</span><p>{project.business.direction.toUpperCase()}</p></div><div className="detail-item"><span className="detail-label">Language</span><p>{project.business.language}</p></div><div className="detail-item"><span className="detail-label">Pages</span><p>{project.strategy.requiredPages.join(', ') || 'Home'}</p></div></div>
                     </div>
                   </div>
                 )}
 
-                {/* 3. DESIGN TAB */}
-                {activeTab === 'Design' && (
-                  <DesignWorkspace
-                    project={project}
-                    onUpdateProject={handleUpdateProject}
-                    onNavigateToAssets={() => setActiveTab('Assets')}
-                  />
-                )}
+                {activeTab === 'Design' && <DesignWorkspace project={project} onUpdateProject={handleUpdateProject} onNavigateToAssets={() => setActiveTab('Assets')} />}
+                {activeTab === 'Assets' && <AssetPlannerView project={project} onUpdateProject={handleUpdateProject} />}
+                {activeTab === 'Build' && <BuildWorkspace project={project} onUpdateProject={handleUpdateProject} onProceedToPreview={() => setActiveTab('Preview')} onProceedToDesign={() => setActiveTab('Design')} onProceedToAssets={() => setActiveTab('Assets')} />}
+                {activeTab === 'Preview' && <SitePreviewView project={project} onProceedToReview={() => setActiveTab('Review')} onProceedToBuild={() => setActiveTab('Build')} />}
 
-                {/* 4. ASSETS TAB */}
-                {activeTab === 'Assets' && (
-                  <AssetPlannerView project={project} onUpdateProject={handleUpdateProject} />
-                )}
-
-                {/* 5. BUILD TAB */}
-                {activeTab === 'Build' && (
-                  <BuildWorkspace
-                    project={project}
-                    onUpdateProject={handleUpdateProject}
-                    onProceedToPreview={() => setActiveTab('Preview')}
-                    onProceedToDesign={() => setActiveTab('Design')}
-                  />
-                )}
-
-                {/* 6. PREVIEW TAB */}
-                {activeTab === 'Preview' && (
-                  <SitePreviewView
-                    project={project}
-                    onProceedToReview={() => setActiveTab('Review')}
-                    onProceedToBuild={() => setActiveTab('Build')}
-                  />
-                )}
-
-                {/* 7. REVIEW TAB */}
                 {activeTab === 'Review' && (
                   <div className="review-view">
-                    <div className="section-intro">
-                      <div>
-                        <span className="eyebrow">STAGE 06 / QA REVIEW</span>
-                        <h2>Design Quality Scorecard</h2>
-                        <p className="section-description">
-                          Comprehensive automated anti-slop audit across hierarchy, typography ratios, spacing consistency,
-                          and conversion readiness.
-                        </p>
-                      </div>
-                      <button className="primary-button" onClick={() => setActiveTab('Design')}>
-                        Open Critic in Design Workspace <ArrowRight size={14} />
-                      </button>
-                    </div>
-
+                    <div className="section-intro"><div><span className="eyebrow">QA REVIEW</span><h2>Production readiness</h2><p className="section-description">Review the assembled pages visually, then return to Build for any content, asset or component corrections before handoff.</p></div><button className="primary-button" onClick={() => setActiveTab('Preview')}>Open Preview <ArrowRight size={14} /></button></div>
                     <div className="foundation-grid">
-                      <article className="metric-card">
-                        <span className="metric-label">Approved Art Direction</span>
-                        <strong>{project.designSystem.artDirection || 'Pending'}</strong>
-                        <span>{project.designSystem.creativeConcept || 'Generate in Design tab'}</span>
-                      </article>
-                      <article className="metric-card">
-                        <span className="metric-label">Planned Sections</span>
-                        <strong>{project.pages.reduce((acc, p) => acc + p.sections.length, 0)}</strong>
-                        <span>Approved registry components only</span>
-                      </article>
-                      <article className="metric-card">
-                        <span className="metric-label">Asset Manifest</span>
-                        <strong>{project.assets.length} planned</strong>
-                        <span>gemini-3.1-flash-image 4K & 2K</span>
-                      </article>
+                      <article className="metric-card"><span className="metric-label">Art Direction</span><strong>{project.designSystem.artDirection || 'Pending'}</strong><span>{project.designSystem.creativeConcept || 'Design tab'}</span></article>
+                      <article className="metric-card"><span className="metric-label">Sections</span><strong>{project.pages.reduce((sum, page) => sum + page.sections.length, 0)}</strong><span>Canonical components</span></article>
+                      <article className="metric-card"><span className="metric-label">Assets</span><strong>{project.assets.filter((asset) => asset.status === 'approved' || asset.status === 'generated').length}</strong><span>Generated or approved</span></article>
                     </div>
                   </div>
                 )}
 
-                {/* 8. HANDOFF TAB */}
-                {activeTab === 'Handoff' && (
-                  <div className="handoff-view">
-                    <div className="section-intro">
-                      <div>
-                        <span className="eyebrow">STAGE 07 / EXPORT</span>
-                        <h2>Choose how this site leaves the studio.</h2>
-                        <p className="section-description">
-                          Target-specific compiler preserves your platform-neutral design system and translates it into clean,
-                          production-ready code without unnecessary runtime dependencies.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="handoff-grid">
-                      {availableExporters.map((exporter) => (
-                        <article className="handoff-card" key={exporter.id}>
-                          <div className="handoff-icon">
-                            {exporter.id === 'shopify' ? (
-                              <ShoppingBag />
-                            ) : exporter.id === 'react' ? (
-                              <Box />
-                            ) : (
-                              <PackageOpen />
-                            )}
-                          </div>
-                          <div>
-                            <h3>{exporter.name}</h3>
-                            <p>
-                              {exporter.id === 'wordpress' &&
-                                'Installable WordPress theme with custom Gutenberg blocks for client-owned hosting.'}
-                              {exporter.id === 'react' &&
-                                'Source TypeScript + React + Tailwind project ready for GitHub, Vercel, or custom hosting.'}
-                              {exporter.id === 'managed' &&
-                                'Agency-managed high-performance deployment and maintenance workflow.'}
-                              {exporter.id === 'shopify' &&
-                                'Online Store 2.0 validated Shopify theme ZIP with Liquid templates and section schemas.'}
-                            </p>
-                          </div>
-                          <ChevronRight size={19} />
-                        </article>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {activeTab === 'Handoff' && <HandoffView project={project} onUpdateProject={handleUpdateProject} />}
               </div>
 
-              {/* RIGHT INSPECTOR */}
               <aside className="inspector">
                 <div className="inspector-title">Architecture Pipeline</div>
                 <ol className="pipeline">
-                  {pipelineSteps.map((step, index) => (
-                    <li key={step.name} className={step.completed ? 'completed' : ''}>
-                      <span>{step.completed ? '✓' : String(index + 1).padStart(2, '0')}</span>
-                      <span>{step.name}</span>
-                    </li>
-                  ))}
+                  {pipelineSteps.map((step, index) => <li key={step.name} className={step.completed ? 'completed' : ''}><span>{step.completed ? '✓' : String(index + 1).padStart(2, '0')}</span><span>{step.name}</span></li>)}
                 </ol>
-
-                <div style={{ marginTop: '28px', borderTop: '1px solid #1f1f23', paddingTop: '18px' }}>
-                  <div className="inspector-title">Design System Tokens</div>
-                  <div style={{ display: 'grid', gap: '8px', fontSize: '11.5px', color: '#888890' }}>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Direction</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.designSystem.artDirection || 'Not yet locked'}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Density</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.brand.contentDensity}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Orientation</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.business.direction.toUpperCase()}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Components</span>
-                      <strong style={{ color: '#e0e0dc' }}>
-                        {demoComponents.filter((c) => c.status === 'approved').length} approved in registry
-                      </strong>
-                    </div>
+                <div style={{ marginTop: 28, borderTop: '1px solid #1f1f23', paddingTop: 18 }}>
+                  <div className="inspector-title">Project Snapshot</div>
+                  <div style={{ display: 'grid', gap: 8, fontSize: 11.5, color: '#888890' }}>
+                    <div><span style={{ color: '#5b5b63', display: 'block', fontSize: 10, textTransform: 'uppercase' }}>Art Direction</span><strong style={{ color: '#e0e0dc' }}>{project.designSystem.artDirection || 'Not locked'}</strong></div>
+                    <div><span style={{ color: '#5b5b63', display: 'block', fontSize: 10, textTransform: 'uppercase' }}>Orientation</span><strong style={{ color: '#e0e0dc' }}>{project.business.direction.toUpperCase()}</strong></div>
+                    <div><span style={{ color: '#5b5b63', display: 'block', fontSize: 10, textTransform: 'uppercase' }}>Pages</span><strong style={{ color: '#e0e0dc' }}>{project.pages.length}</strong></div>
+                    <div><span style={{ color: '#5b5b63', display: 'block', fontSize: 10, textTransform: 'uppercase' }}>Last Export</span><strong style={{ color: '#e0e0dc' }}>{String(project.exportConfig.settings.lastArtifactName || 'None')}</strong></div>
                   </div>
                 </div>
               </aside>
@@ -493,12 +218,7 @@ export default function App() {
         )}
       </main>
 
-      {/* New Project Modal */}
-      <NewProjectModal
-        isOpen={isNewProjectModalOpen}
-        onClose={() => setIsNewProjectModalOpen(false)}
-        onCreate={handleCreateProject}
-      />
+      <NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} onCreate={handleCreateProject} />
     </div>
   );
 }
