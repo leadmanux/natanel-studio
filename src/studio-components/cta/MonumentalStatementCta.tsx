@@ -30,7 +30,9 @@ export function MonumentalStatementCta(props: StudioComponentProps<MonumentalCta
         secondaryCta: 'Review Working Protocols',
       };
 
-  const content = { ...defaultContent, ...props.content };
+  const content = props.contentMode === 'production'
+    ? { ...(props.content || {}) }
+    : { ...defaultContent, ...(props.content || {}) };
 
   return (
     <StudioComponentWrapper {...props}>
@@ -53,93 +55,105 @@ export function MonumentalStatementCta(props: StudioComponentProps<MonumentalCta
             gap: '24px',
           }}
         >
-          <span
-            style={{
-              fontFamily: 'monospace',
-              fontSize: '11px',
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: 'var(--studio-accent)',
-              fontWeight: 700,
-            }}
-          >
-            {content.monogram}
-          </span>
-
-          <h2
-            style={{
-              fontFamily: 'var(--studio-font-display)',
-              fontSize: 'clamp(32px, 4.5vw, 56px)',
-              lineHeight: 1.15,
-              fontWeight: 600,
-              color: 'var(--studio-text)',
-              margin: 0,
-            }}
-          >
-            {content.statement}
-          </h2>
-
-          <p
-            style={{
-              fontSize: '16px',
-              lineHeight: 1.65,
-              color: 'var(--studio-muted)',
-              maxWidth: '560px',
-              margin: 0,
-            }}
-          >
-            {content.subtext}
-          </p>
-
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '16px',
-              paddingTop: '16px',
-            }}
-          >
-            <a
-              href="#contact"
+          {content.monogram && (
+            <span
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '14px 32px',
-                minHeight: '48px',
-                borderRadius: 'var(--studio-radius)',
-                backgroundColor: 'var(--studio-accent)',
-                color: '#111',
-                fontSize: '13.5px',
+                fontFamily: 'monospace',
+                fontSize: '11px',
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: 'var(--studio-accent)',
                 fontWeight: 700,
-                textDecoration: 'none',
               }}
             >
-              <span>{content.primaryCta}</span>
-              {isRtl ? <ArrowLeft size={16} /> : <ArrowRight size={16} />}
-            </a>
+              {content.monogram}
+            </span>
+          )}
 
-            <a
-              href="#faqs"
+          {content.statement && (
+            <h2
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '14px 24px',
-                minHeight: '48px',
-                borderRadius: 'var(--studio-radius)',
-                backgroundColor: 'transparent',
-                border: '1px solid var(--studio-border)',
+                fontFamily: 'var(--studio-font-display)',
+                fontSize: 'clamp(32px, 4.5vw, 56px)',
+                lineHeight: 1.15,
+                fontWeight: 600,
                 color: 'var(--studio-text)',
-                fontSize: '13.5px',
-                fontWeight: 500,
-                textDecoration: 'none',
+                margin: 0,
               }}
             >
-              {content.secondaryCta}
-            </a>
-          </div>
+              {content.statement}
+            </h2>
+          )}
+
+          {content.subtext && (
+            <p
+              style={{
+                fontSize: '16px',
+                lineHeight: 1.65,
+                color: 'var(--studio-muted)',
+                maxWidth: '560px',
+                margin: 0,
+              }}
+            >
+              {content.subtext}
+            </p>
+          )}
+
+          {(content.primaryCta || content.secondaryCta) && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '16px',
+                paddingTop: '16px',
+              }}
+            >
+              {content.primaryCta && (
+                <a
+                  href="#contact"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '14px 32px',
+                    minHeight: '48px',
+                    borderRadius: 'var(--studio-radius)',
+                    backgroundColor: 'var(--studio-accent)',
+                    color: '#111',
+                    fontSize: '13.5px',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                  }}
+                >
+                  <span>{content.primaryCta}</span>
+                  {isRtl ? <ArrowLeft size={16} /> : <ArrowRight size={16} />}
+                </a>
+              )}
+
+              {content.secondaryCta && (
+                <a
+                  href="#faqs"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '14px 24px',
+                    minHeight: '48px',
+                    borderRadius: 'var(--studio-radius)',
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--studio-border)',
+                    color: 'var(--studio-text)',
+                    fontSize: '13.5px',
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                  }}
+                >
+                  {content.secondaryCta}
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </section>
     </StudioComponentWrapper>
