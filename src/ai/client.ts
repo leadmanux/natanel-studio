@@ -97,3 +97,52 @@ export async function requestImageGeneration(req: ImageGeneratorRequest): Promis
   }
   return res.json();
 }
+
+export async function requestSitePlan(project: Project): Promise<Project['pages']> {
+  const res = await fetch('/api/ai/plan-site', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Failed to plan site architecture' }));
+    throw new Error(error.error || 'Failed to plan site architecture');
+  }
+  const data = await res.json();
+  return data.pages;
+}
+
+export async function requestSiteCompose(project: Project): Promise<{
+  pages: Project['pages'];
+  diagnostics: Array<{ pageId: string; sectionId: string; type: string; message: string; suggestedAction: string }>;
+  composedAt: string;
+}> {
+  const res = await fetch('/api/ai/compose-site', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Failed to compose site' }));
+    throw new Error(error.error || 'Failed to compose site');
+  }
+  return res.json();
+}
+
+export async function requestSectionCompose(
+  project: Project,
+  pageId: string,
+  sectionId: string
+): Promise<{ section: Project['pages'][0]['sections'][0]; diagnostics: string[] }> {
+  const res = await fetch('/api/ai/compose-section', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project, pageId, sectionId }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Failed to compose section' }));
+    throw new Error(error.error || 'Failed to compose section');
+  }
+  return res.json();
+}
+

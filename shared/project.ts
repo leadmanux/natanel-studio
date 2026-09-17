@@ -113,6 +113,8 @@ export interface DesignSystem {
   approvedAt?: string;
 }
 
+export type SectionContentStatus = 'ready' | 'needs_input' | 'invalid';
+
 export interface SiteSection {
   id: string;
   name: string;
@@ -125,6 +127,10 @@ export interface SiteSection {
   contentRequirements?: string[];
   imageRequirements?: string[];
   motionPreset?: string;
+  contentStatus?: SectionContentStatus;
+  missingFactualFields?: string[];
+  missingAssetRequirements?: string[];
+  contentDiagnostics?: string[];
 }
 
 export interface SitePage {

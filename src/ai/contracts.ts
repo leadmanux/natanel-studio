@@ -129,3 +129,46 @@ export interface DesignCriticService {
   ): Promise<DesignCriticReport>;
 }
 
+export type SectionCompositionProgressStatus =
+  | 'waiting'
+  | 'generating_copy'
+  | 'validating'
+  | 'binding_assets'
+  | 'needs_input'
+  | 'ready'
+  | 'error';
+
+export interface SiteComposerProgress {
+  pageId: string;
+  pageName: string;
+  sectionId: string;
+  sectionName: string;
+  status: SectionCompositionProgressStatus;
+  message?: string;
+}
+
+export interface SiteComposerResult {
+  pages: Project['pages'];
+  diagnostics: Array<{
+    pageId: string;
+    sectionId: string;
+    type: string;
+    message: string;
+    suggestedAction: string;
+  }>;
+  composedAt: string;
+}
+
+export interface SiteComposerService {
+  compose(
+    project: Project,
+    onProgress?: (progress: SiteComposerProgress) => void
+  ): Promise<SiteComposerResult>;
+  composeSection(
+    project: Project,
+    pageId: string,
+    sectionId: string
+  ): Promise<{ section: Project['pages'][0]['sections'][0]; diagnostics: string[] }>;
+}
+
+

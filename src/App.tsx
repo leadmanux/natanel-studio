@@ -29,6 +29,9 @@ import { AssetPlannerView } from './components/AssetPlannerView';
 import { ComponentLibraryView } from './components/ComponentLibraryView';
 import { ComponentSandboxView } from './components/ComponentSandboxView';
 import { NewProjectModal } from './components/NewProjectModal';
+import { BuildWorkspace } from './components/BuildWorkspace';
+import { SitePreviewView } from './components/SitePreviewView';
+import { StandalonePreviewView } from './components/StandalonePreviewView';
 
 const navItems = [
   { label: 'Projects', icon: FolderKanban },
@@ -41,6 +44,12 @@ const navItems = [
 const workspaceTabs = ['Brief', 'Strategy', 'Design', 'Assets', 'Build', 'Preview', 'Review', 'Handoff'];
 
 export default function App() {
+  // Check if current route is standalone preview
+  const isStandalonePreview = typeof window !== 'undefined' && window.location.pathname.startsWith('/studio-preview');
+  if (isStandalonePreview) {
+    return <StandalonePreviewView />;
+  }
+
   const [activeNav, setActiveNav] = useState('Projects');
   const [activeTab, setActiveTab] = useState('Brief');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -342,133 +351,21 @@ export default function App() {
 
                 {/* 5. BUILD TAB */}
                 {activeTab === 'Build' && (
-                  <div className="build-view">
-                    <div className="section-intro">
-                      <div>
-                        <span className="eyebrow">STAGE 04 / COMPOSITION</span>
-                        <h2>Architectural Assembly & Page Blueprint</h2>
-                        <p className="section-description">
-                          Composition of approved registry components. Assembled sections maintain mathematical
-                          rhythm, tokenized padding, and responsive typography scales.
-                        </p>
-                      </div>
-                      <button className="primary-button" onClick={() => setActiveTab('Preview')}>
-                        Live Preview <ArrowRight size={14} />
-                      </button>
-                    </div>
-
-                    {project.pages.length === 0 ? (
-                      <div className="empty-state-box">
-                        <Layers size={32} strokeWidth={1.2} />
-                        <h3>No pages assembled yet</h3>
-                        <p>Complete the Art Direction and Component Selection in the Design tab to compose pages.</p>
-                        <button className="primary-button" onClick={() => setActiveTab('Design')} style={{ marginTop: '14px' }}>
-                          Go to Component Selection
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="page-blueprint-card">
-                        <div className="page-blueprint-header">
-                          <div>
-                            <h3>{project.pages[0].name} ({project.pages[0].sections.length} Sections)</h3>
-                            <span className="page-slug">{project.pages[0].slug}</span>
-                          </div>
-                          <span className="status-pill status-approved">ASSEMBLY READY</span>
-                        </div>
-                        <div className="sections-pipeline">
-                          {project.pages[0].sections.map((sec, idx) => (
-                            <div key={sec.id} className="section-blueprint-row">
-                              <div className="section-order-col">
-                                <span className="order-number">{String(idx + 1).padStart(2, '0')}</span>
-                              </div>
-                              <div className="section-detail-card">
-                                <strong>{sec.purpose}</strong>
-                                <span className="reg-id-mono">{sec.componentRegistryId}</span>
-                                <p className="selection-reason">{sec.reason}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <BuildWorkspace
+                    project={project}
+                    onUpdateProject={handleUpdateProject}
+                    onProceedToPreview={() => setActiveTab('Preview')}
+                    onProceedToDesign={() => setActiveTab('Design')}
+                  />
                 )}
 
                 {/* 6. PREVIEW TAB */}
                 {activeTab === 'Preview' && (
-                  <div className="preview-view" dir={project.business.direction}>
-                    <div className="section-intro">
-                      <div>
-                        <span className="eyebrow">STAGE 05 / WIREFRAME & CADENCE PREVIEW</span>
-                        <h2>
-                          {project.business.direction === 'rtl' ? 'תצוגה מקדימה (RTL)' : 'Live Structural Preview'}
-                        </h2>
-                        <p className="section-description">
-                          Reviewing section rhythm, optical balance, and orientation alignment.
-                          {project.business.direction === 'rtl' && ' Layout is rendered right-to-left.'}
-                        </p>
-                      </div>
-                      <button className="secondary-button" onClick={() => setActiveTab('Review')}>
-                        Run Quality Review <ShieldCheck size={14} />
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        border: '1px solid #29292e',
-                        background: '#0e0e10',
-                        padding: '28px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '24px',
-                      }}
-                    >
-                      {/* Wireframe Mock Header */}
-                      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #222225', paddingBottom: '16px' }}>
-                        <div style={{ fontWeight: 700, fontSize: '18px', letterSpacing: '-0.02em' }}>
-                          {project.business.businessName || project.name}
-                        </div>
-                        <nav style={{ display: 'flex', gap: '20px', fontSize: '13px', color: '#9d9da5' }}>
-                          <span>Overview</span>
-                          <span>Portfolio</span>
-                          <span>Philosophy</span>
-                          <span>Contact</span>
-                        </nav>
-                      </header>
-
-                      {/* Sections Wireframe */}
-                      {project.pages.length > 0 && project.pages[0].sections.length > 0 ? (
-                        project.pages[0].sections.map((sec, idx) => (
-                          <div
-                            key={sec.id}
-                            style={{
-                              border: '1px dashed #2d2d33',
-                              background: '#131316',
-                              padding: '36px 28px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '12px',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span className="eyebrow">SECTION {String(idx + 1).padStart(2, '0')} // {sec.componentRegistryId.toUpperCase()}</span>
-                              <span className="category-pill">{sec.purpose}</span>
-                            </div>
-                            <h3 style={{ margin: '4px 0', fontSize: '22px', fontWeight: 550 }}>
-                              {sec.purpose}
-                            </h3>
-                            <p style={{ margin: 0, fontSize: '13px', color: '#8f8f97', maxWidth: '640px' }}>
-                              {sec.reason}
-                            </p>
-                          </div>
-                        ))
-                      ) : (
-                        <div style={{ padding: '48px 0', textAlign: 'center', color: '#77777f' }}>
-                          Execute Component Selection in the Design tab to generate section wireframes.
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <SitePreviewView
+                    project={project}
+                    onProceedToReview={() => setActiveTab('Review')}
+                    onProceedToBuild={() => setActiveTab('Build')}
+                  />
                 )}
 
                 {/* 7. REVIEW TAB */}

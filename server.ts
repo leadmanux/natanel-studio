@@ -8,6 +8,8 @@ import { GeminiReferenceAnalyzer } from './server/services/referenceAnalyzer';
 import { GeminiComponentSelector } from './server/services/componentSelector';
 import { GeminiAssetPlanner } from './server/services/assetPlanner';
 import { GeminiDesignCritic } from './server/services/designCritic';
+import { GeminiSitePlanner } from './server/services/sitePlanner';
+import { GeminiSiteComposer } from './server/services/siteComposer';
 import { demoComponents } from './shared/componentRegistry';
 import { canonicalComponentStore } from './server/services/canonicalComponentStore';
 
@@ -186,6 +188,54 @@ async function startServer() {
       return res.json({ report });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to critique design.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  // Site Planner: Multi-page structure planning with approved components
+  app.post('/api/ai/plan-site', async (req, res) => {
+    try {
+      const { project } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const planner = new GeminiSitePlanner();
+      const pages = await planner.plan(project);
+      return res.json({ pages });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to plan site architecture.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  // Site Composer: Production-ready truthful content composition
+  app.post('/api/ai/compose-site', async (req, res) => {
+    try {
+      const { project } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      const composer = new GeminiSiteComposer();
+      const result = await composer.compose(project);
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to compose site.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  // Section Composer: Single section regeneration
+  app.post('/api/ai/compose-section', async (req, res) => {
+    try {
+      const { project, pageId, sectionId } = req.body;
+      if (!project || !pageId || !sectionId) {
+        return res.status(400).json({ error: 'Project, pageId, and sectionId are required.' });
+      }
+      const composer = new GeminiSiteComposer();
+      const result = await composer.composeSection(project, pageId, sectionId);
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to compose section.';
       return res.status(500).json({ error: message });
     }
   });
