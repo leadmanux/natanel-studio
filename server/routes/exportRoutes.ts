@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { ExportTarget, Project } from '../../shared/project';
 import { SiteExportService } from '../services/exportService';
+import { normalizeReactSourceZip } from '../services/reactZipNormalizer';
 import { normalizeShopifyThemeZip } from '../services/shopifyZipNormalizer';
 
 const router = Router();
@@ -33,9 +34,10 @@ router.post('/generate', async (req, res) => {
   try {
     const target = parsed.data as ExportTarget;
     const artifact = await service.generate(project, target);
-    const output = target === 'shopify'
-      ? await normalizeShopifyThemeZip(artifact.buffer)
-      : artifact.buffer;
+    let output = artifact.buffer;
+    if (target === 'shopify') output = await normalizeShopifyThemeZip(output);
+    if (target === 'react') output = await normalizeReactSourceZip(output);
+
     res.setHeader('Content-Type', artifact.mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${artifact.filename}"`);
     res.setHeader('X-Natanel-Export-Target', artifact.target);
