@@ -139,10 +139,6 @@ export interface ShippingFact {
   provenance?: FactProvenance;
 }
 
-/**
- * Explicit factual inputs that production composition may rely on.
- * Gemini must never invent values for these records.
- */
 export interface ProjectFacts {
   services: ServiceFact[];
   products: ProductFact[];
@@ -167,12 +163,7 @@ export interface ReferenceAnalysis {
   retrievedUrl?: string;
   retrievalNotes?: string;
   source?: 'ai' | 'deterministic_fallback';
-  screenshots?:
-    | {
-        desktop?: string;
-        mobile?: string;
-      }
-    | string[];
+  screenshots?: { desktop?: string; mobile?: string } | string[];
   summary: string;
   layout: string;
   typography: string;
@@ -245,6 +236,8 @@ export interface SiteSection {
   purpose: string;
   content: Record<string, unknown>;
   assetIds: string[];
+  /** Explicit slot -> project asset ID assignments from the Builder. */
+  assetBindings?: Record<string, string>;
   order: number;
   reason?: string;
   contentRequirements?: string[];
