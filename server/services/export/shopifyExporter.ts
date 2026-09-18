@@ -45,15 +45,6 @@ interface SectionBuildContext {
   emittedStaticTypes: Set<string>;
 }
 
-const NATIVE_SECTION_TYPES = new Set([
-  'ns-product-hero',
-  'ns-product-grid',
-  'ns-product-details',
-  'ns-cart-main',
-  'ns-faq',
-  'ns-reviews',
-]);
-
 /**
  * Shopify Online Store 2.0 exporter.
  *
@@ -402,64 +393,6 @@ ${JSON.stringify(schema, null, 2)}
 `;
 }
 
-function buildGlobalStaticSection(
-  section: SiteSection,
-  page: SitePage,
-  project: Project,
-  canonicalComponents: ComponentDefinition[],
-  processedAssets: CollectedProjectAssets,
-  role: 'header' | 'footer'
-): string {
-  const rendered = renderExactExportSection(
-    section,
-    page,
-    project,
-    canonicalComponents,
-    (sourceUrl) => {
-      const filename = processedAssets.urlToFilenameMap.get(sourceUrl);
-      if (!filename) throw new Error(`Localized Shopify asset mapping missing for global ${role}.`);
-      return `${ASSET_TOKEN_PREFIX}${filename}${ASSET_TOKEN_SUFFIX}`;
-    }
-  );
-
-  let html = rendered.html;
-  for (const asset of processedAssets.assets) {
-    html = html
-      .split(`${ASSET_TOKEN_PREFIX}${asset.filename}${ASSET_TOKEN_SUFFIX}`)
-      .join(`{{ '${escapeLiquidString(asset.filename)}' | asset_url }}`);
-  }
-  html = rewriteInternalLinksForShopify(html, project);
-
-  if (role === 'header') {
-    html = html.replace(
-      'aria-label="Toggle Menu"',
-      'aria-label="Toggle Menu" data-ns-menu-toggle aria-controls="NatanelMobileMenu" aria-expanded="false"'
-    );
-    const mobileLinks = project.pages
-      .map(
-        (candidate) =>
-          `<a href="${shopifyPageUrl(candidate)}">${escapeHtml(candidate.name)}</a>`
-      )
-      .join('');
-    html = `<div class="ns-global-header-shell">
-${html}
-<a class="ns-cart-chip" href="{{ routes.cart_url }}" aria-label="Cart">${project.business.direction === 'rtl' ? 'סל' : 'Cart'} <span data-ns-cart-count>{{ cart.item_count }}</span></a>
-<nav id="NatanelMobileMenu" class="ns-mobile-menu" data-ns-mobile-menu hidden>${mobileLinks}<a href="{{ routes.cart_url }}">${project.business.direction === 'rtl' ? 'סל קניות' : 'Cart'}</a></nav>
-</div>`;
-  }
-
-  const schema = {
-    name: role === 'header' ? 'Natanel Header' : 'Natanel Footer',
-    settings: [],
-  };
-
-  return `${html}
-{% schema %}
-${JSON.stringify(schema, null, 2)}
-{% endschema %}
-`;
-}
-
 function writeThemeFoundation(
   zip: JSZip,
   project: Project,
@@ -468,6 +401,22 @@ function writeThemeFoundation(
   manifest: ReturnType<typeof createExportManifest>
 ) {
   zip.file('layout/theme.liquid', buildThemeLayout(project));
+  zip.file(
+    'sections/header-group.json',
+    JSON.stringify(
+      { type: 'header', name: 'Header group', sections: { header: { type: 'ns-header', settings: {} } }, order: ['header'] },
+      null,
+      2
+    )
+  );
+  zip.file(
+    'sections/footer-group.json',
+    JSON.stringify(
+      { type: 'footer', name: 'Footer group', sections: { footer: { type: 'ns-footer', settings: {} } }, order: ['footer'] },
+      null,
+      2
+    )
+  );
   zip.file('assets/theme.css', buildThemeCss(project, tokens));
   zip.file('assets/theme.js', buildThemeJs());
   zip.file('assets/natanel-studio-manifest.json', JSON.stringify(manifest, null, 2));
@@ -484,6 +433,13 @@ function writeThemeFoundation(
   }
 
   zip.file('snippets/ns-product-card.liquid', buildProductCardSnippet());
+  zip.file('templates/article.json', JSON.stringify(emptyTemplate('ns-main-article'), null, 2));
+  zip.file('templates/blog.json', JSON.stringify(emptyTemplate('ns-main-blog'), null, 2));
+  zip.file('templates/list-collections.json', JSON.stringify(emptyTemplate('ns-list-collections'), null, 2));
+  zip.file('templates/page.contact.json', JSON.stringify(emptyTemplate('ns-contact'), null, 2));
+  zip.file('templates/password.json', JSON.stringify(emptyTemplate('ns-password'), null, 2));
+  zip.file('templates/search.json', JSON.stringify(emptyTemplate('ns-search'), null, 2));
+  zip.file('templates/gift_card.liquid', buildGiftCardTemplate(project));
   zip.file(
     'assets/natanel-studio-export.txt',
     `Natanel Studio Shopify export\nProject: ${project.name}\nTheme slug: ${safeSlug}\nGenerated theme uses Online Store 2.0 JSON templates and native Shopify product/cart objects.\n`
@@ -501,6 +457,13 @@ function writeNativeCommerceSections(zip: JSZip, project: Project) {
 function writeNativeUtilitySections(zip: JSZip) {
   zip.file('sections/ns-faq.liquid', buildFaqLiquid());
   zip.file('sections/ns-main-page.liquid', buildMainPageLiquid());
+  zip.file('sections/ns-main-article.liquid', buildArticleLiquid());
+  zip.file('sections/ns-main-blog.liquid', buildBlogLiquid());
+  zip.file('sections/ns-list-collections.liquid', buildListCollectionsLiquid());
+  zip.file('sections/ns-contact.liquid', buildContactLiquid());
+  zip.file('sections/ns-search.liquid', buildSearchLiquid());
+  zip.file('sections/ns-password.liquid', buildPasswordLiquid());
+  zip.file('sections/ns-custom-liquid.liquid', buildCustomLiquid());
   zip.file('sections/ns-404.liquid', build404Liquid());
 }
 
@@ -532,11 +495,11 @@ function buildThemeLayout(project: Project): string {
 </head>
 <body class="template-{{ template.name | handle }}">
   <a class="ns-skip-link" href="#MainContent">{{ 'accessibility.skip_to_content' | t }}</a>
-  {% section 'ns-header' %}
+  {% sections 'header-group' %}
   <main id="MainContent" role="main" tabindex="-1">
     {{ content_for_layout }}
   </main>
-  {% section 'ns-footer' %}
+  {% sections 'footer-group' %}
   <script src="{{ 'theme.js' | asset_url }}" defer></script>
 </body>
 </html>
@@ -554,6 +517,7 @@ function buildSettingsSchema(
       theme_author: 'Natanel Studio',
       theme_version: '1.0.0',
       theme_documentation_url: 'https://github.com/leadmanux/natanel-studio',
+      theme_support_url: 'https://github.com/leadmanux/natanel-studio/issues',
     },
     {
       name: 'Design',
