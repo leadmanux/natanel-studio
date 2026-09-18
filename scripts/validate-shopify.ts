@@ -442,7 +442,7 @@ async function run() {
   );
 
   for (const [filename, entry] of Object.entries(zip.files)) {
-    if (entry.dir || !filename.endsWith('.liquid')) continue;
+    if (entry.dir || !filename.startsWith('sections/') || !filename.endsWith('.liquid')) continue;
     schemaJson(await entry.async('text'), filename);
   }
 
