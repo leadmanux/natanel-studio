@@ -132,7 +132,10 @@ export function ProductGridCardRow(props: StudioComponentProps<ProductGridConten
     );
   }
 
-  const products = props.content?.products || defaultProducts;
+  const products = (props.content?.products || defaultProducts).map((product, index) => ({
+    ...product,
+    image: product.image || props.assets?.[`prod_${index}`]?.url || '',
+  }));
 
   const handleAdd = (id: string, name: string) => {
     setCartItems((prev) => ({ ...prev, [id]: true }));
