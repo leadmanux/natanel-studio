@@ -23,18 +23,26 @@ export function validateProjectForExport(
   const issues: ExportValidationIssue[] = [];
   const componentLookup = new Map(canonicalComponents.map((component) => [component.id, component]));
 
-  if (target !== 'wordpress' && target !== 'react') {
+  if (target !== 'wordpress' && target !== 'react' && target !== 'shopify') {
     issues.push({
       code: 'unsupported_export_target',
-      message: `Export target "${target}" is not available in Export Engine V1.`,
+      message: `Export target "${target}" is not available in the current Export Engine.`,
       severity: 'error',
     });
   }
 
-  if (project.projectType !== 'business_website') {
+  if ((target === 'wordpress' || target === 'react') && project.projectType !== 'business_website') {
     issues.push({
       code: 'unsupported_project_type',
-      message: `Export Engine V1 supports business_website projects only. Current type: "${project.projectType}".`,
+      message: `${target} export supports business_website projects only. Current type: "${project.projectType}".`,
+      severity: 'error',
+    });
+  }
+
+  if (target === 'shopify' && project.projectType !== 'shopify') {
+    issues.push({
+      code: 'unsupported_project_type',
+      message: `Shopify export requires a shopify project. Current type: "${project.projectType}".`,
       severity: 'error',
     });
   }
