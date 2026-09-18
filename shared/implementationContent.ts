@@ -35,6 +35,19 @@ export function adaptContentForStudioImplementation(
     next.ctaLabel = content.ctaLabel ?? '';
   }
 
+  if (id === 'nav-centered-luxury-01') {
+    const links = Array.isArray(content.links) ? content.links : [];
+    const midpoint = Math.ceil(links.length / 2);
+    next.brandMonogram = content.brandMonogram ?? content.monogram ?? '';
+    next.leftLinks = content.leftLinks ?? links.slice(0, midpoint);
+    next.rightLinks = content.rightLinks ?? links.slice(midpoint);
+  }
+
+  if (id === 'forms-faq-accordion-01') {
+    next.title = content.title ?? content.headline ?? '';
+    next.faqs = content.faqs ?? content.items ?? [];
+  }
+
   if (id === 'ecommerce-product-grid-01') {
     next.title = content.title ?? content.headline ?? '';
     next.products = Array.isArray(content.products)
@@ -45,6 +58,29 @@ export function adaptContentForStudioImplementation(
           rating: product.rating ?? '',
         }))
       : [];
+  }
+
+  if (id === 'ecommerce-detail-accordion-01') {
+    next.title = content.title ?? content.productName ?? '';
+    next.specs = Array.isArray(content.specs)
+      ? content.specs
+      : Array.isArray(content.accordionItems)
+        ? content.accordionItems.map((item: any) => ({
+            label: item.title ?? '',
+            value: item.content ?? '',
+          }))
+        : [];
+  }
+
+  if (id === 'footer-minimal-legal-01') {
+    const brandName = String(content.brandName ?? project.business.businessName ?? '');
+    const year = String(content.copyrightYear ?? new Date().getFullYear());
+    next.copyright = content.copyright ?? (brandName ? `© ${year} ${brandName}. All rights reserved.` : '');
+    next.legalNotice = content.legalNotice ?? (
+      Array.isArray(content.legalLinks)
+        ? content.legalLinks.map((link: any) => link?.label).filter(Boolean).join(' • ')
+        : ''
+    );
   }
 
   if (id === 'footer-editorial-architectural-01') {

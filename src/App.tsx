@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { demoComponents } from '@shared/componentRegistry';
 import { createEmptyProject, type Project, type ProjectType } from '@shared/project';
+import { createShopifyReferenceProject } from '@shared/referenceShopifyProject';
 import { projectRepository } from './data/projectRepository';
 import { BriefEditor } from './components/BriefEditor';
 import { DesignWorkspace } from './components/DesignWorkspace';
@@ -93,6 +94,13 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
     handleUpdateProject(updated);
+  };
+
+  const handleLoadShopifyReferenceStore = () => {
+    const referenceProject = createShopifyReferenceProject('rtl');
+    handleUpdateProject(referenceProject);
+    setActiveNav('Projects');
+    setActiveTab('Preview');
   };
 
   // Determine pipeline steps completion
@@ -212,7 +220,25 @@ export default function App() {
                   <span className="detail-label">RTL Support</span>
                   <p>First-class Hebrew & Arabic directional layout with typography and component mirroring</p>
                 </div>
-              </div>
+
+
+              <div className="form-card" style={{ marginTop: 18 }}>
+                <div className="card-header-line">
+                  <ShieldCheck size={16} />
+                  <h3>QA Reference Store</h3>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">End-to-end Shopify test fixture</span>
+                  <p>
+                    Loads a clearly labelled Hebrew RTL reference store with approved sections and local deterministic
+                    assets. Use it to inspect Preview, Builder, Handoff validation and the Shopify ZIP without touching a
+                    client project.
+                  </p>
+                </div>
+                <button className="secondary-button" onClick={handleLoadShopifyReferenceStore}>
+                  <ShoppingBag size={15} /> Load RTL Shopify Reference Store
+                </button>
+              </div>              </div>
             </div>
           </section>
         ) : (
