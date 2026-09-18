@@ -60,6 +60,43 @@ async function validateDirection(direction: 'ltr' | 'rtl') {
       for (const marker of DEMO_MARKERS) {
         assert(!rendered.html.includes(marker), `Section ${section.id} leaked Studio demo marker "${marker}".`);
       }
+
+      if (section.id === 'qa-nav') {
+        assert(rendered.html.includes(project.business.businessName), 'Reference navigation lost canonical brandName content.');
+        assert(rendered.html.includes(direction === 'rtl' ? 'חנות' : 'Shop'), 'Reference navigation lost canonical links content.');
+      }
+      if (section.id === 'qa-home-product' || section.id === 'qa-product-hero') {
+        assert(rendered.html.includes('NORTH FORM One'), `Reference product hero ${section.id} lost product content.`);
+        assert(rendered.html.includes('/reference-assets/qa-product-primary'), `Reference product hero ${section.id} lost its bound product asset.`);
+      }
+      if (section.id === 'qa-product-grid') {
+        assert(rendered.html.includes('NORTH FORM One'), 'Reference product grid lost canonical product content.');
+        assert(rendered.html.includes('/reference-assets/qa-product-primary'), 'Reference product grid did not consume prod_0 asset binding.');
+        assert(rendered.html.includes('/reference-assets/qa-product-secondary'), 'Reference product grid did not consume prod_1 asset binding.');
+      }
+      if (section.id === 'qa-product-details') {
+        assert(rendered.html.includes('NORTH FORM One'), 'Reference product detail lost canonical productName.');
+        assert(
+          rendered.html.includes(direction === 'rtl' ? 'מה בודקים כאן?' : 'What is tested here?'),
+          'Reference product detail did not adapt canonical accordionItems into the production renderer.'
+        );
+      }
+      if (section.id === 'qa-faq') {
+        assert(
+          rendered.html.includes(direction === 'rtl' ? 'האם זה מוצר אמיתי?' : 'Is this a real product?'),
+          'Reference FAQ did not adapt canonical items into the production renderer.'
+        );
+      }
+      if (section.id === 'qa-about') {
+        assert(
+          rendered.html.includes(direction === 'rtl' ? 'חנות אחת שבודקת את כל המערכת.' : 'One store that tests the whole system.'),
+          'Reference About hero lost canonical approved content.'
+        );
+      }
+      if (section.id === 'qa-footer') {
+        assert(rendered.html.includes(project.business.businessName), 'Reference footer lost canonical brand content.');
+        assert(rendered.html.includes('2026'), 'Reference footer lost canonical copyrightYear content.');
+      }
     }
   }
 
