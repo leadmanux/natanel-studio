@@ -129,9 +129,26 @@ export class ShopifyThemeExporter implements SiteExporter {
 
       const emittedStaticTypes = new Set<string>();
       const reservedTemplateKinds = new Set<'product' | 'collection' | 'cart'>();
-      let wroteIndex = false;
+      const homePage = project.pages.find((page) => page.slug === '/') || project.pages[0];
+
+      if (homePage) {
+        const homeTemplate = buildTemplateForPage({
+          zip,
+          project,
+          page: homePage,
+          canonicalComponents: this.canonicalComponents,
+          componentLookup,
+          processedAssets,
+          emittedStaticTypes,
+        });
+        zip.file('templates/index.json', JSON.stringify(homeTemplate, null, 2));
+      } else {
+        zip.file('templates/index.json', JSON.stringify(emptyTemplate('ns-main-page'), null, 2));
+      }
 
       for (const page of project.pages) {
+        if (homePage && page.id === homePage.id) continue;
+
         const template = buildTemplateForPage({
           zip,
           project,
@@ -143,14 +160,6 @@ export class ShopifyThemeExporter implements SiteExporter {
         });
 
         const preferredKind = classifyShopifyPage(page, componentLookup);
-        if (page.slug === '/' || !wroteIndex) {
-          if (!wroteIndex) {
-            zip.file('templates/index.json', JSON.stringify(template, null, 2));
-            wroteIndex = true;
-            if (page.slug === '/') continue;
-          }
-        }
-
         if (
           (preferredKind === 'product' || preferredKind === 'collection' || preferredKind === 'cart') &&
           !reservedTemplateKinds.has(preferredKind)
@@ -160,12 +169,8 @@ export class ShopifyThemeExporter implements SiteExporter {
           continue;
         }
 
-        const pageHandle = page.slug === '/' ? 'home-copy' : sanitizeHandle(page.slug.replace(/^\//, '') || page.name);
+        const pageHandle = sanitizeHandle(page.slug.replace(/^\//, '') || page.name);
         zip.file(`templates/page.${pageHandle}.json`, JSON.stringify(template, null, 2));
-      }
-
-      if (!wroteIndex) {
-        zip.file('templates/index.json', JSON.stringify(emptyTemplate('ns-main-page'), null, 2));
       }
       if (!reservedTemplateKinds.has('product')) {
         zip.file(
