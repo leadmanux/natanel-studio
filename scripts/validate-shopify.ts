@@ -376,7 +376,16 @@ async function run() {
     'sections/ns-faq.liquid',
     'sections/ns-reviews.liquid',
     'sections/ns-main-page.liquid',
+    'sections/ns-main-article.liquid',
+    'sections/ns-main-blog.liquid',
+    'sections/ns-list-collections.liquid',
+    'sections/ns-contact.liquid',
+    'sections/ns-search.liquid',
+    'sections/ns-password.liquid',
+    'sections/ns-custom-liquid.liquid',
     'sections/ns-404.liquid',
+    'sections/header-group.json',
+    'sections/footer-group.json',
     'snippets/ns-product-card.liquid',
     'templates/index.json',
     'templates/product.json',
@@ -384,6 +393,13 @@ async function run() {
     'templates/cart.json',
     'templates/page.json',
     'templates/page.about.json',
+    'templates/article.json',
+    'templates/blog.json',
+    'templates/list-collections.json',
+    'templates/page.contact.json',
+    'templates/password.json',
+    'templates/search.json',
+    'templates/gift_card.liquid',
     'templates/404.json',
   ];
   required.forEach((filename) => assert(zip.file(filename), `Shopify ZIP missing required file ${filename}.`));
@@ -391,11 +407,35 @@ async function run() {
   const layout = await read(zip, 'layout/theme.liquid');
   assert(layout.includes('{{ content_for_header }}'), 'theme.liquid is missing content_for_header.');
   assert(layout.includes('{{ content_for_layout }}'), 'theme.liquid is missing content_for_layout.');
-  assert(layout.includes("{% section 'ns-header' %}"), 'theme.liquid is missing the global header section.');
-  assert(layout.includes("{% section 'ns-footer' %}"), 'theme.liquid is missing the global footer section.');
+  assert(layout.includes("{% sections 'header-group' %}"), 'theme.liquid is missing the header section group.');
+  assert(layout.includes("{% sections 'footer-group' %}"), 'theme.liquid is missing the footer section group.');
+  assert(!layout.includes("{% section 'ns-header' %}"), 'theme.liquid still uses legacy static header rendering.');
+  assert(!layout.includes("{% section 'ns-footer' %}"), 'theme.liquid still uses legacy static footer rendering.');
 
-  JSON.parse(await read(zip, 'config/settings_schema.json'));
+  const settingsSchema = JSON.parse(await read(zip, 'config/settings_schema.json')) as Array<Record<string, unknown>>;
   JSON.parse(await read(zip, 'config/settings_data.json'));
+  const themeInfo = settingsSchema.find((entry) => entry.name === 'theme_info') as Record<string, unknown> | undefined;
+  assert(themeInfo, 'settings_schema.json is missing theme_info.');
+  assert(typeof themeInfo.theme_documentation_url === 'string', 'theme_info is missing theme_documentation_url.');
+  const supportMethods = ['theme_support_url', 'theme_support_email'].filter(
+    (key) => typeof themeInfo[key] === 'string' && String(themeInfo[key]).trim().length > 0
+  );
+  assert(supportMethods.length === 1, 'theme_info must provide exactly one support URL/email.');
+
+  const headerGroup = JSON.parse(await read(zip, 'sections/header-group.json')) as {
+    type?: string;
+    sections?: Record<string, { type?: string }>;
+    order?: string[];
+  };
+  const footerGroup = JSON.parse(await read(zip, 'sections/footer-group.json')) as {
+    type?: string;
+    sections?: Record<string, { type?: string }>;
+    order?: string[];
+  };
+  assert(headerGroup.type === 'header', 'header-group.json has the wrong group type.');
+  assert(footerGroup.type === 'footer', 'footer-group.json has the wrong group type.');
+  assert(Object.values(headerGroup.sections || {}).some((section) => section.type === 'ns-header'), 'Header group does not reference ns-header.');
+  assert(Object.values(footerGroup.sections || {}).some((section) => section.type === 'ns-footer'), 'Footer group does not reference ns-footer.');
   JSON.parse(await read(zip, 'templates/index.json'));
   JSON.parse(await read(zip, 'templates/product.json'));
   JSON.parse(await read(zip, 'templates/collection.json'));
@@ -420,6 +460,7 @@ async function run() {
   assert(productHero.includes("{% form 'product', featured_product %}"), 'Product hero is not using a native Shopify product form.');
   assert(productHero.includes('selected_or_first_available_variant'), 'Product hero is missing variant-aware Shopify logic.');
   assert(productHero.includes('| asset_url'), 'Product hero does not support localized fallback theme assets.');
+  assert(productHero.includes('payment_button'), 'Product hero is missing accelerated checkout support.');
 
   const productGrid = await read(zip, 'sections/ns-product-grid.liquid');
   assert(productGrid.includes('collections.all'), 'Product grid does not fall back to Shopify products.');
@@ -429,6 +470,9 @@ async function run() {
   assert(cart.includes('cart.items'), 'Cart section does not use Shopify cart items.');
   assert(cart.includes('routes.cart_url'), 'Cart section does not use Shopify cart routes.');
   assert(cart.includes('name="checkout"'), 'Cart section is missing native checkout submission.');
+  assert(cart.includes('content_for_additional_checkout_buttons'), 'Cart is missing accelerated checkout buttons.');
+  assert(cart.includes('line_level_discount_allocations'), 'Cart is missing line-level discount rendering.');
+  assert(cart.includes('cart_level_discount_applications'), 'Cart is missing cart-level discount rendering.');
 
   const aboutTemplate = JSON.parse(await read(zip, 'templates/page.about.json')) as {
     sections: Record<string, { type: string }>;
@@ -439,6 +483,14 @@ async function run() {
   assert(
     aboutLiquid.includes('Material, utility and detail before everything'),
     'Static Shopify section did not preserve exact approved Studio content.'
+  );
+
+  const customLiquidSchema = schemaJson(await read(zip, 'sections/ns-custom-liquid.liquid'), 'sections/ns-custom-liquid.liquid') as {
+    settings?: Array<{ type?: string }>;
+  };
+  assert(
+    customLiquidSchema.settings?.some((setting) => setting.type === 'liquid'),
+    'Custom Liquid section does not expose a liquid setting.'
   );
 
   for (const [filename, entry] of Object.entries(zip.files)) {
@@ -462,6 +514,16 @@ async function run() {
     }
   }
 
+  for (const [groupFilename, group] of [
+    ['sections/header-group.json', headerGroup],
+    ['sections/footer-group.json', footerGroup],
+  ] as const) {
+    for (const section of Object.values(group.sections || {})) {
+      if (!section.type) continue;
+      assert(zip.file(`sections/${section.type}.liquid`), `${groupFilename} references missing section type ${section.type}.`);
+    }
+  }
+
   const forbidden = [
     'images.unsplash.com',
     'Verified Studio Asset',
@@ -470,6 +532,14 @@ async function run() {
     '/api/ai/',
     '/api/export/',
     '__NS_SHOPIFY_ASSET__',
+    'studio@natanel.design',
+    'atelier@natanel.design',
+    '03-555-0199',
+    '03-555-1234',
+    '1-800-555-0199',
+    '054-456-7890',
+    '+972-54-456-7890',
+    'SUMMER MMXXVI',
   ];
   for (const [filename, entry] of Object.entries(zip.files)) {
     if (entry.dir || !/\.(liquid|json|css|js|txt)$/i.test(filename)) continue;
@@ -492,6 +562,40 @@ async function run() {
     'RTL Shopify layout did not preserve project direction.'
   );
   assert(rtlZip.file('locales/he.json'), 'RTL Shopify export is missing Hebrew locale file.');
+
+  const tooManySections = makeShopifyProject('ltr');
+  const sourceSection = tooManySections.pages[4].sections[0];
+  tooManySections.pages[4].sections = Array.from({ length: 26 }, (_, index) => ({
+    ...sourceSection,
+    id: `too-many-${index + 1}`,
+    order: index + 1,
+  }));
+  const tooManyValidation = validateProjectForExport(tooManySections, 'shopify', canonical);
+  assert(!tooManyValidation.valid, 'Shopify page with 26 body sections incorrectly passed validation.');
+  assert(
+    tooManyValidation.issues.some((issue) => issue.code === 'shopify_template_section_limit'),
+    'Shopify section-count overflow did not produce the expected validation issue.'
+  );
+
+  const unsupportedInteractive = makeShopifyProject('ltr');
+  unsupportedInteractive.pages[4].sections = [
+    readySection({
+      id: 'interactive-slider',
+      name: 'Interactive Before After',
+      componentRegistryId: 'portfolio-before-after-01',
+      purpose: 'Interactive comparison',
+      order: 1,
+      motionPreset: 'none',
+      content: { title: 'Before and after', subtitle: 'Comparison' },
+      assetIds: [],
+    }),
+  ];
+  const interactiveValidation = validateProjectForExport(unsupportedInteractive, 'shopify', canonical);
+  assert(!interactiveValidation.valid, 'Unsupported React-only Shopify interaction incorrectly passed validation.');
+  assert(
+    interactiveValidation.issues.some((issue) => issue.code === 'shopify_interactive_component_unsupported'),
+    'Unsupported Shopify interaction did not produce the expected validation issue.'
+  );
 
   const remoteFailure = makeShopifyProject('ltr');
   remoteFailure.assets[0].outputUrl = 'https://assets.example.com/missing.png';
