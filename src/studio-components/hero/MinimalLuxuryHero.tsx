@@ -5,9 +5,13 @@ import { StudioComponentWrapper } from '../StudioComponentWrapper';
 export interface MinimalLuxuryHeroContent {
   monogram?: string;
   season?: string;
+  kicker?: string;
   headline?: string;
   subheadline?: string;
+  description?: string;
   ctaText?: string;
+  primaryCtaLabel?: string;
+  primaryCtaHref?: string;
 }
 
 export function MinimalLuxuryHero(props: StudioComponentProps<MinimalLuxuryHeroContent>) {
@@ -37,8 +41,9 @@ export function MinimalLuxuryHero(props: StudioComponentProps<MinimalLuxuryHeroC
         headline: props.content?.headline || '',
         subheadline: props.content?.subheadline || props.content?.description || '',
         ctaText: props.content?.ctaText || props.content?.primaryCtaLabel || '',
+        primaryCtaHref: props.content?.primaryCtaHref || '',
       }
-    : { ...defaultContent, ...props.content };
+    : { ...defaultContent, ...props.content, primaryCtaHref: props.content?.primaryCtaHref || '#appointment' };
 
   return (
     <StudioComponentWrapper {...props}>
@@ -118,7 +123,7 @@ export function MinimalLuxuryHero(props: StudioComponentProps<MinimalLuxuryHeroC
 
           <div style={{ paddingTop: '16px' }}>
             <a
-              href="#appointment"
+              href={content.primaryCtaHref || '#appointment'}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
