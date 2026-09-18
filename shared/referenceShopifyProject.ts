@@ -183,13 +183,10 @@ export function createShopifyReferenceProject(direction: TextDirection = 'rtl'):
     content: {
       brandName: project.business.businessName,
       monogram: 'NF',
-      brandMonogram: 'NF',
       links: [
         { label: rtl ? 'חנות' : 'Shop', href: '/shop' },
         { label: rtl ? 'אודות' : 'About', href: '/about' },
       ],
-      leftLinks: [{ label: rtl ? 'חנות' : 'Shop', href: '/shop' }],
-      rightLinks: [{ label: rtl ? 'אודות' : 'About', href: '/about' }],
       ctaLabel: rtl ? 'למוצר' : 'View product',
       ctaHref: '/product',
     },
