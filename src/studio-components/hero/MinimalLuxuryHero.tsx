@@ -29,7 +29,16 @@ export function MinimalLuxuryHero(props: StudioComponentProps<MinimalLuxuryHeroC
         ctaText: 'Reserve Private Consultation',
       };
 
-  const content = { ...defaultContent, ...props.content };
+  const isProduction = props.contentMode === 'production';
+  const content = isProduction
+    ? {
+        monogram: props.content?.monogram || '',
+        season: props.content?.season || props.content?.kicker || '',
+        headline: props.content?.headline || '',
+        subheadline: props.content?.subheadline || props.content?.description || '',
+        ctaText: props.content?.ctaText || props.content?.primaryCtaLabel || '',
+      }
+    : { ...defaultContent, ...props.content };
 
   return (
     <StudioComponentWrapper {...props}>
