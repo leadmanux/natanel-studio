@@ -91,7 +91,7 @@ export function ProductDetailAccordion(props: StudioComponentProps<ProductDetail
               margin: 0,
             }}
           >
-            {isRtl ? 'מפרט טכני, חומריות ואחריות' : 'Material Specifications & Provenance'}
+            {props.content?.title || (isRtl ? 'מפרט טכני, חומריות ואחריות' : 'Material Specifications & Provenance')}
           </h2>
 
           {/* Accordion Tabs */}
