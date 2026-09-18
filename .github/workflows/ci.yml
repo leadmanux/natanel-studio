@@ -28,5 +28,7 @@ jobs:
         run: npm run validate:export
       - name: Validate Shopify Export
         run: npm run validate:shopify
+      - name: Validate Reference Store
+        run: npm run validate:reference-store
       - name: Build
         run: npm run build
