@@ -57,6 +57,42 @@ export function validateProjectForExport(
   }
 
   const normalizedSlugs = new Set<string>();
+
+  if (target === 'shopify') {
+    const unsupportedInteractive = new Set([
+      'portfolio-before-after-01',
+      'portfolio-horizontal-reel-01',
+      'forms-multistep-intake-01',
+      'forms-single-step-conversion-01',
+    ]);
+
+    for (const page of project.pages) {
+      const bodySections = (page.sections || []).filter((section) => {
+        const component = componentLookup.get(section.componentRegistryId);
+        return component?.category !== 'navigation' && component?.category !== 'footer';
+      });
+      if (bodySections.length > 25) {
+        issues.push({
+          code: 'shopify_template_section_limit',
+          message: `Page "${page.name}" has ${bodySections.length} body sections. Shopify JSON templates support at most 25 sections.`,
+          severity: 'error',
+          pageId: page.id,
+        });
+      }
+
+      for (const section of bodySections) {
+        if (unsupportedInteractive.has(section.componentRegistryId)) {
+          issues.push({
+            code: 'shopify_interactive_component_unsupported',
+            message: `Section "${section.name}" uses "${section.componentRegistryId}", which requires React interaction and does not yet have a native Shopify Liquid implementation.`,
+            severity: 'error',
+            pageId: page.id,
+            sectionId: section.id,
+          });
+        }
+      }
+    }
+  }
   for (const page of project.pages) {
     const raw = page.slug?.trim() || '';
     if (!raw) {
