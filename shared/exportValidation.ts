@@ -144,7 +144,7 @@ export function validateProjectForExport(
     }
   }
 
-  validateWarnings(project, componentLookup, issues);
+  validateWarnings(project, target, componentLookup, issues);
   return finalizeValidation(issues);
 }
 
@@ -300,6 +300,7 @@ function validateSection(
 
 function validateWarnings(
   project: Project,
+  target: ExportTarget,
   componentLookup: Map<string, ComponentDefinition>,
   issues: ExportValidationIssue[]
 ) {
@@ -338,6 +339,32 @@ function validateWarnings(
       message: 'No phone, email, or WhatsApp contact information is present.',
       severity: 'warning',
     });
+  }
+
+  if (target === 'shopify') {
+    const alternatePages = project.pages.filter((page) => page.slug !== '/');
+    if (alternatePages.length) {
+      issues.push({
+        code: 'shopify_page_resources_required',
+        message: 'Shopify theme ZIPs can provide alternate page templates but cannot create store Page resources. After upload, create/assign the matching Pages in Shopify Admin where needed.',
+        severity: 'warning',
+      });
+    }
+
+    for (const page of project.pages) {
+      const looksLikeProductTemplate = /product/i.test(`${page.name} ${page.slug} ${page.purpose}`);
+      for (const section of page.sections || []) {
+        if (section.componentRegistryId === 'hero-product-commerce-01' && !looksLikeProductTemplate) {
+          issues.push({
+            code: 'shopify_featured_product_binding_required',
+            message: `Section "${section.name}" on "${page.name}" uses a product hero outside the product template. Select its Shopify product in the Theme Editor after upload to enable native Add to Cart.`,
+            severity: 'warning',
+            pageId: page.id,
+            sectionId: section.id,
+          });
+        }
+      }
+    }
   }
 
   for (const page of project.pages) {
