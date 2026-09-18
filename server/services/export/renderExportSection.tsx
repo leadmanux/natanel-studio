@@ -113,6 +113,26 @@ export function renderExactExportSection(
       throw new Error('Component rendered empty markup.');
     }
 
+    const unsafeDemoMarkers = [
+      'images.unsplash.com',
+      'studio@natanel.design',
+      'atelier@natanel.design',
+      '03-555-0199',
+      '03-555-1234',
+      '1-800-555-0199',
+      '054-456-7890',
+      '+972-54-456-7890',
+      'SUMMER MMXXVI',
+      'Villa 04 Sovereign',
+      'Basalt Pavilion',
+    ];
+    const leakedMarker = unsafeDemoMarkers.find((marker) => html.includes(marker));
+    if (leakedMarker) {
+      throw new Error(
+        `Production render contains Studio demo content ("${leakedMarker}"). Supply approved project content/assets or use a production-safe component.`
+      );
+    }
+
     return {
       html,
       assetIds: resolution.boundAssetIds,
