@@ -19,7 +19,9 @@ export interface ExportWorkspaceProps {
 }
 
 export function ExportWorkspace({ project, onNavigateToBuilder }: ExportWorkspaceProps) {
-  const [selectedTarget, setSelectedTarget] = useState<Extract<ExportTarget, 'wordpress' | 'react'>>('wordpress');
+  const [selectedTarget, setSelectedTarget] = useState<Extract<ExportTarget, 'wordpress' | 'react' | 'shopify'>>(
+    project.projectType === 'shopify' ? 'shopify' : 'wordpress'
+  );
   const [validation, setValidation] = useState<ExportValidation | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -54,8 +56,19 @@ export function ExportWorkspace({ project, onNavigateToBuilder }: ExportWorkspac
   }, [project, selectedTarget]);
 
   useEffect(() => {
+    const preferredTarget: Extract<ExportTarget, 'wordpress' | 'react' | 'shopify'> =
+      project.projectType === 'shopify' ? 'shopify' : 'wordpress';
+    if (
+      (project.projectType === 'shopify' && selectedTarget !== 'shopify') ||
+      (project.projectType === 'business_website' && selectedTarget === 'shopify')
+    ) {
+      setSelectedTarget(preferredTarget);
+      setValidation(null);
+      setExportResult(null);
+      return;
+    }
     runValidation(selectedTarget);
-  }, [runValidation, selectedTarget]);
+  }, [project.id, project.projectType, runValidation, selectedTarget]);
 
   const handleExport = async () => {
     if (!validation?.valid) return;
@@ -118,9 +131,10 @@ export function ExportWorkspace({ project, onNavigateToBuilder }: ExportWorkspac
         <TargetCard
           selected={selectedTarget === 'wordpress'}
           title="WordPress Block Theme"
-          description="Recommended client handoff. Site Editor compatible, no Elementor required."
+          description="Recommended business-site handoff. Site Editor compatible, no Elementor required."
           icon={<Layers size={21} />}
-          badge="Recommended"
+          badge="Business"
+          disabled={project.projectType !== 'business_website'}
           onClick={() => setSelectedTarget('wordpress')}
         />
         <TargetCard
@@ -129,13 +143,18 @@ export function ExportWorkspace({ project, onNavigateToBuilder }: ExportWorkspac
           description="Standalone Vite/React source with localized assets and no Studio runtime APIs."
           icon={<Code2 size={21} />}
           badge="Developer"
+          disabled={project.projectType !== 'business_website'}
           onClick={() => setSelectedTarget('react')}
         />
-        <div style={{ border: '1px solid #24242a', background: '#101014', borderRadius: 7, padding: 20, opacity: .55 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 13 }}><Store size={21} /><span style={{ fontSize: 10, color: '#e5b95c' }}>COMING NEXT</span></div>
-          <strong>Shopify Theme</strong>
-          <p style={{ margin: '7px 0 0', color: '#777780', fontSize: 12, lineHeight: 1.45 }}>Online Store 2.0 exporter is intentionally disabled until the business export foundation is verified.</p>
-        </div>
+        <TargetCard
+          selected={selectedTarget === 'shopify'}
+          title="Shopify Theme"
+          description="Online Store 2.0 ZIP with native product, collection, cart and theme-editor sections."
+          icon={<Store size={21} />}
+          badge="Commerce"
+          disabled={project.projectType !== 'shopify'}
+          onClick={() => setSelectedTarget('shopify')}
+        />
       </div>
 
       {error && (
@@ -186,16 +205,20 @@ export function ExportWorkspace({ project, onNavigateToBuilder }: ExportWorkspac
           disabled={exportDisabled}
           style={{ border: 0, borderRadius: 5, padding: '10px 15px', background: exportDisabled ? '#2a2a2f' : '#2563eb', color: exportDisabled ? '#66666d' : '#fff', cursor: exportDisabled ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7 }}
         >
-          <Download size={14} /> {isExporting ? 'Generating…' : `Export ${selectedTarget === 'wordpress' ? 'WordPress' : 'React'} ZIP`}
+          <Download size={14} /> {isExporting ? 'Generating…' : `Export ${selectedTarget === 'wordpress' ? 'WordPress' : selectedTarget === 'react' ? 'React' : 'Shopify'} ZIP`}
         </button>
       </div>
     </div>
   );
 }
 
-function TargetCard({ selected, title, description, icon, badge, onClick }: { selected: boolean; title: string; description: string; icon: React.ReactNode; badge: string; onClick: () => void }) {
+function TargetCard({ selected, title, description, icon, badge, onClick, disabled = false }: { selected: boolean; title: string; description: string; icon: React.ReactNode; badge: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onClick} style={{ textAlign: 'left', color: '#e4e4e7', border: selected ? '2px solid #4f7de0' : '1px solid #29292f', background: selected ? '#151a25' : '#121216', borderRadius: 7, padding: 20, cursor: 'pointer' }}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{ textAlign: 'left', color: '#e4e4e7', border: selected ? '2px solid #4f7de0' : '1px solid #29292f', background: selected ? '#151a25' : '#121216', borderRadius: 7, padding: 20, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .45 : 1 }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 13 }}><span style={{ color: '#7da6ff' }}>{icon}</span><span style={{ fontSize: 10, color: selected ? '#9dbaff' : '#777780' }}>{badge.toUpperCase()}</span></div>
       <strong style={{ display: 'block', fontSize: 14 }}>{title}</strong>
       <span style={{ display: 'block', marginTop: 6, color: '#8a8a92', fontSize: 12, lineHeight: 1.45 }}>{description}</span>

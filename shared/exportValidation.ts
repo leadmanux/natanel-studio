@@ -23,18 +23,26 @@ export function validateProjectForExport(
   const issues: ExportValidationIssue[] = [];
   const componentLookup = new Map(canonicalComponents.map((component) => [component.id, component]));
 
-  if (target !== 'wordpress' && target !== 'react') {
+  if (target !== 'wordpress' && target !== 'react' && target !== 'shopify') {
     issues.push({
       code: 'unsupported_export_target',
-      message: `Export target "${target}" is not available in Export Engine V1.`,
+      message: `Export target "${target}" is not available in the current Export Engine.`,
       severity: 'error',
     });
   }
 
-  if (project.projectType !== 'business_website') {
+  if ((target === 'wordpress' || target === 'react') && project.projectType !== 'business_website') {
     issues.push({
       code: 'unsupported_project_type',
-      message: `Export Engine V1 supports business_website projects only. Current type: "${project.projectType}".`,
+      message: `${target} export supports business_website projects only. Current type: "${project.projectType}".`,
+      severity: 'error',
+    });
+  }
+
+  if (target === 'shopify' && project.projectType !== 'shopify') {
+    issues.push({
+      code: 'unsupported_project_type',
+      message: `Shopify export requires a shopify project. Current type: "${project.projectType}".`,
       severity: 'error',
     });
   }
@@ -49,6 +57,42 @@ export function validateProjectForExport(
   }
 
   const normalizedSlugs = new Set<string>();
+
+  if (target === 'shopify') {
+    const unsupportedInteractive = new Set([
+      'portfolio-before-after-01',
+      'portfolio-horizontal-reel-01',
+      'forms-multistep-intake-01',
+      'forms-single-step-conversion-01',
+    ]);
+
+    for (const page of project.pages) {
+      const bodySections = (page.sections || []).filter((section) => {
+        const component = componentLookup.get(section.componentRegistryId);
+        return component?.category !== 'navigation' && component?.category !== 'footer';
+      });
+      if (bodySections.length > 25) {
+        issues.push({
+          code: 'shopify_template_section_limit',
+          message: `Page "${page.name}" has ${bodySections.length} body sections. Shopify JSON templates support at most 25 sections.`,
+          severity: 'error',
+          pageId: page.id,
+        });
+      }
+
+      for (const section of bodySections) {
+        if (unsupportedInteractive.has(section.componentRegistryId)) {
+          issues.push({
+            code: 'shopify_interactive_component_unsupported',
+            message: `Section "${section.name}" uses "${section.componentRegistryId}", which requires React interaction and does not yet have a native Shopify Liquid implementation.`,
+            severity: 'error',
+            pageId: page.id,
+            sectionId: section.id,
+          });
+        }
+      }
+    }
+  }
   for (const page of project.pages) {
     const raw = page.slug?.trim() || '';
     if (!raw) {
@@ -100,7 +144,7 @@ export function validateProjectForExport(
     }
   }
 
-  validateWarnings(project, componentLookup, issues);
+  validateWarnings(project, target, componentLookup, issues);
   return finalizeValidation(issues);
 }
 
@@ -256,6 +300,7 @@ function validateSection(
 
 function validateWarnings(
   project: Project,
+  target: ExportTarget,
   componentLookup: Map<string, ComponentDefinition>,
   issues: ExportValidationIssue[]
 ) {
@@ -294,6 +339,32 @@ function validateWarnings(
       message: 'No phone, email, or WhatsApp contact information is present.',
       severity: 'warning',
     });
+  }
+
+  if (target === 'shopify') {
+    const alternatePages = project.pages.filter((page) => page.slug !== '/');
+    if (alternatePages.length) {
+      issues.push({
+        code: 'shopify_page_resources_required',
+        message: 'Shopify theme ZIPs can provide alternate page templates but cannot create store Page resources. After upload, create/assign the matching Pages in Shopify Admin where needed.',
+        severity: 'warning',
+      });
+    }
+
+    for (const page of project.pages) {
+      const looksLikeProductTemplate = /product/i.test(`${page.name} ${page.slug} ${page.purpose}`);
+      for (const section of page.sections || []) {
+        if (section.componentRegistryId === 'hero-product-commerce-01' && !looksLikeProductTemplate) {
+          issues.push({
+            code: 'shopify_featured_product_binding_required',
+            message: `Section "${section.name}" on "${page.name}" uses a product hero outside the product template. Select its Shopify product in the Theme Editor after upload to enable native Add to Cart.`,
+            severity: 'warning',
+            pageId: page.id,
+            sectionId: section.id,
+          });
+        }
+      }
+    }
   }
 
   for (const page of project.pages) {

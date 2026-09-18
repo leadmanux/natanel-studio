@@ -12,6 +12,7 @@
     "validate:registry": "tsx scripts/validate-registry.ts",
     "validate:composer": "tsx scripts/validate-composer.ts",
     "validate:export": "tsx scripts/validate-export.ts",
+    "validate:shopify": "tsx scripts/validate-shopify.ts",
     "preview": "vite preview"
   },
   "dependencies": {

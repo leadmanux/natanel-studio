@@ -26,5 +26,7 @@ jobs:
         run: npm run validate:composer
       - name: Validate Export Engine
         run: npm run validate:export
+      - name: Validate Shopify Export
+        run: npm run validate:shopify
       - name: Build
         run: npm run build

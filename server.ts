@@ -14,6 +14,7 @@ import { canonicalComponentStore } from './server/services/canonicalComponentSto
 import { validateProjectForExport } from './shared/exportValidation';
 import { WordPressThemeExporter } from './server/services/export/wordpressExporter';
 import { ReactSourceExporter } from './server/services/export/reactExporter';
+import { ShopifyThemeExporter } from './server/services/export/shopifyExporter';
 import { exportStore } from './server/services/export/exportStore';
 
 async function startServer() {
@@ -294,6 +295,25 @@ async function startServer() {
       return res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'React export failed.';
+      return res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/export/shopify', async (req, res) => {
+    try {
+      const { project } = req.body;
+      if (!project) {
+        return res.status(400).json({ error: 'Project payload is required.' });
+      }
+      await canonicalComponentStore.init();
+      const exporter = new ShopifyThemeExporter(canonicalComponentStore.getAllComponents());
+      const result = await exporter.export(project);
+      if (!result.success) {
+        return res.status(400).json(result);
+      }
+      return res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Shopify export failed.';
       return res.status(500).json({ error: message });
     }
   });
