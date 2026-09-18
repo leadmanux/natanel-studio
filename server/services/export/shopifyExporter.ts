@@ -133,33 +133,8 @@ export class ShopifyThemeExporter implements SiteExporter {
       const headerEntry = orderedEntries.find((entry) => entry.component?.category === 'navigation');
       const footerEntry = orderedEntries.find((entry) => entry.component?.category === 'footer');
 
-      zip.file(
-        'sections/ns-header.liquid',
-        headerEntry
-          ? buildGlobalStaticSection(
-              headerEntry.section,
-              headerEntry.page,
-              project,
-              this.canonicalComponents,
-              processedAssets,
-              'header'
-            )
-          : buildFallbackHeader(project)
-      );
-
-      zip.file(
-        'sections/ns-footer.liquid',
-        footerEntry
-          ? buildGlobalStaticSection(
-              footerEntry.section,
-              footerEntry.page,
-              project,
-              this.canonicalComponents,
-              processedAssets,
-              'footer'
-            )
-          : buildFallbackFooter(project)
-      );
+      zip.file('sections/ns-header.liquid', buildNativeHeader(project, headerEntry?.section));
+      zip.file('sections/ns-footer.liquid', buildNativeFooter(project, footerEntry?.section));
 
       const emittedStaticTypes = new Set<string>();
       const reservedTemplateKinds = new Set<'product' | 'collection' | 'cart'>();
@@ -612,7 +587,7 @@ function buildThemeCss(
   project: Project,
   tokens: ReturnType<typeof compileProjectDesignTokens>['tokens']
 ): string {
-  return `*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--studio-bg);color:var(--studio-text);font-family:${tokens.fontBody};-webkit-font-smoothing:antialiased}a{color:inherit}img{max-width:100%;height:auto}.ns-skip-link{position:absolute;left:-9999px}.ns-skip-link:focus{left:16px;top:16px;z-index:9999;background:var(--studio-bg);color:var(--studio-text);padding:10px 14px}.studio-export-motion{opacity:1;transform:none;clip-path:inset(0);transition:opacity .5s cubic-bezier(.22,1,.36,1),transform .6s cubic-bezier(.22,1,.36,1),clip-path .65s cubic-bezier(.16,1,.3,1)}.studio-export-motion[data-studio-motion="fadeReveal"]:not(.is-visible),.studio-export-motion[data-studio-motion="textStagger"]:not(.is-visible){opacity:0;transform:translateY(16px)}.studio-export-motion[data-studio-motion="clipReveal"]:not(.is-visible){opacity:0;clip-path:inset(8% 0 0 0)}.studio-export-motion[data-studio-motion="imageScaleOnScroll"]:not(.is-visible){opacity:.95;transform:scale(1.05)}.studio-export-motion[data-studio-motion="stackedCards"]:not(.is-visible){opacity:0;transform:translateY(24px) scale(.98)}.studio-export-motion[data-studio-motion="fadeSettle"]:not(.is-visible){opacity:0}.studio-export-motion[data-studio-motion="none"]{opacity:1!important;transform:none!important;clip-path:none!important}.ns-global-header-shell{position:relative}.ns-cart-chip{position:absolute;top:14px;${project.business.direction === 'rtl' ? 'left' : 'right'}:18px;z-index:5;display:inline-flex;gap:7px;align-items:center;padding:8px 10px;border:1px solid var(--studio-border);background:var(--studio-bg);text-decoration:none;font-size:12px}.ns-mobile-menu{padding:16px 24px;border-bottom:1px solid var(--studio-border);background:var(--studio-bg);display:grid;gap:12px}.ns-mobile-menu[hidden]{display:none}.ns-mobile-menu a{text-decoration:none}.ns-native-section{padding:var(--studio-section-space,96px) 24px;border-bottom:1px solid var(--studio-border)}.ns-container{width:min(1240px,100%);margin:0 auto}.ns-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--studio-accent);font-weight:700}.ns-heading{font-family:${tokens.fontDisplay};font-size:clamp(28px,4vw,48px);line-height:1.12;margin:8px 0 0}.ns-copy{color:var(--studio-muted);line-height:1.65}.ns-button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:13px 22px;border:0;border-radius:${tokens.radius};background:var(--studio-accent);color:#111;text-decoration:none;font-weight:700;cursor:pointer}.ns-button-secondary{background:transparent;color:var(--studio-text);border:1px solid var(--studio-border)}.ns-product-hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center}.ns-product-media{aspect-ratio:4/5;background:var(--studio-surface);border:1px solid var(--studio-border);overflow:hidden;border-radius:${tokens.radius}}.ns-product-media img{width:100%;height:100%;object-fit:cover}.ns-product-details{display:grid;gap:18px}.ns-price{font-size:26px;font-weight:700}.ns-compare-price{margin-inline-start:10px;text-decoration:line-through;color:var(--studio-muted)}.ns-variant-select,.ns-qty{width:100%;max-width:380px;min-height:44px;background:var(--studio-surface);color:var(--studio-text);border:1px solid var(--studio-border);padding:10px 12px}.ns-product-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px}.ns-card{display:grid;gap:10px}.ns-card-media{aspect-ratio:3/4;background:var(--studio-surface);overflow:hidden;border:1px solid var(--studio-border)}.ns-card-media img{width:100%;height:100%;object-fit:cover}.ns-card-title{font-size:14px;margin:0}.ns-card-meta{font-size:12px;color:var(--studio-muted)}.ns-stack{display:grid;gap:14px}.ns-details{border:1px solid var(--studio-border);background:var(--studio-surface);padding:0 18px}.ns-details summary{cursor:pointer;padding:18px 0;font-weight:600}.ns-details-content{padding:0 0 18px;color:var(--studio-muted);line-height:1.65}.ns-cart-item{display:grid;grid-template-columns:88px 1fr auto;gap:16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--studio-border)}.ns-cart-item img{width:88px;height:88px;object-fit:cover}.ns-cart-summary{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-top:24px}.ns-reviews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.ns-review{padding:22px;border:1px solid var(--studio-border);background:var(--studio-surface)}.grid-split{grid-template-columns:1fr 1fr!important}.md-flex{display:flex!important}.md-hide{display:none!important}@media(max-width:900px){.ns-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ns-reviews{grid-template-columns:1fr 1fr}}@media(max-width:760px){.grid-split,.ns-product-hero-grid{grid-template-columns:1fr!important}.md-flex{display:none!important}.md-hide{display:inline-flex!important}.ns-cart-chip{top:16px;${project.business.direction === 'rtl' ? 'left:72px' : 'right:72px'}}.ns-product-grid,.ns-reviews{grid-template-columns:1fr}.ns-cart-item{grid-template-columns:72px 1fr}.ns-cart-item> :last-child{grid-column:2}.ns-cart-summary{align-items:stretch;flex-direction:column}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.studio-export-motion{opacity:1!important;transform:none!important;clip-path:none!important;transition:none!important}}
+  return `*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--studio-bg);color:var(--studio-text);font-family:${tokens.fontBody};-webkit-font-smoothing:antialiased}a{color:inherit}img{max-width:100%;height:auto}.ns-skip-link{position:absolute;left:-9999px}.ns-skip-link:focus{left:16px;top:16px;z-index:9999;background:var(--studio-bg);color:var(--studio-text);padding:10px 14px}.studio-export-motion{opacity:1;transform:none;clip-path:inset(0);transition:opacity .5s cubic-bezier(.22,1,.36,1),transform .6s cubic-bezier(.22,1,.36,1),clip-path .65s cubic-bezier(.16,1,.3,1)}.studio-export-motion[data-studio-motion="fadeReveal"]:not(.is-visible),.studio-export-motion[data-studio-motion="textStagger"]:not(.is-visible){opacity:0;transform:translateY(16px)}.studio-export-motion[data-studio-motion="clipReveal"]:not(.is-visible){opacity:0;clip-path:inset(8% 0 0 0)}.studio-export-motion[data-studio-motion="imageScaleOnScroll"]:not(.is-visible){opacity:.95;transform:scale(1.05)}.studio-export-motion[data-studio-motion="stackedCards"]:not(.is-visible){opacity:0;transform:translateY(24px) scale(.98)}.studio-export-motion[data-studio-motion="fadeSettle"]:not(.is-visible){opacity:0}.studio-export-motion[data-studio-motion="none"]{opacity:1!important;transform:none!important;clip-path:none!important}.ns-shopify-header{padding:18px 24px;border-bottom:1px solid var(--studio-border);background:var(--studio-bg)}.ns-header-row{display:flex;align-items:center;justify-content:space-between;gap:24px}.ns-header-grid{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px}.ns-header-brand{display:inline-flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;font-family:${tokens.fontDisplay};font-weight:700}.ns-header-monogram{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--studio-accent);border-radius:50%;font-size:12px}.ns-header-links,.ns-header-actions,.ns-footer-links{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.ns-header-links a,.ns-header-actions a,.ns-footer-links a,.ns-footer-contact a,.ns-footer-legal a{text-decoration:none}.ns-header-actions{justify-content:flex-end}.ns-header-mobile{display:none;position:relative}.ns-header-mobile summary{cursor:pointer;list-style:none;border:1px solid var(--studio-border);padding:8px 10px}.ns-header-mobile nav{position:absolute;${project.business.direction === 'rtl' ? 'left' : 'right'}:0;top:calc(100% + 8px);z-index:30;min-width:220px;padding:14px;background:var(--studio-bg);border:1px solid var(--studio-border);display:grid;gap:12px}.ns-shopify-footer{padding:38px 24px;border-top:1px solid var(--studio-border);background:var(--studio-bg)}.ns-footer-top,.ns-footer-legal{display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap}.ns-footer-contact{margin-top:14px;color:var(--studio-muted)}.ns-footer-legal{margin-top:20px;padding-top:16px;border-top:1px solid var(--studio-border);font-size:12px;color:var(--studio-muted)}.ns-native-section{padding:var(--studio-section-space,96px) 24px;border-bottom:1px solid var(--studio-border)}.ns-container{width:min(1240px,100%);margin:0 auto}.ns-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--studio-accent);font-weight:700}.ns-heading{font-family:${tokens.fontDisplay};font-size:clamp(28px,4vw,48px);line-height:1.12;margin:8px 0 0}.ns-copy{color:var(--studio-muted);line-height:1.65}.ns-button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:13px 22px;border:0;border-radius:${tokens.radius};background:var(--studio-accent);color:#111;text-decoration:none;font-weight:700;cursor:pointer}.ns-button-secondary{background:transparent;color:var(--studio-text);border:1px solid var(--studio-border)}.ns-product-hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center}.ns-product-media{aspect-ratio:4/5;background:var(--studio-surface);border:1px solid var(--studio-border);overflow:hidden;border-radius:${tokens.radius}}.ns-product-media img{width:100%;height:100%;object-fit:cover}.ns-product-details{display:grid;gap:18px}.ns-price{font-size:26px;font-weight:700}.ns-compare-price{margin-inline-start:10px;text-decoration:line-through;color:var(--studio-muted)}.ns-variant-select,.ns-qty{width:100%;max-width:380px;min-height:44px;background:var(--studio-surface);color:var(--studio-text);border:1px solid var(--studio-border);padding:10px 12px}.ns-product-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px}.ns-card{display:grid;gap:10px}.ns-card-media{aspect-ratio:3/4;background:var(--studio-surface);overflow:hidden;border:1px solid var(--studio-border)}.ns-card-media img{width:100%;height:100%;object-fit:cover}.ns-card-title{font-size:14px;margin:0}.ns-card-meta{font-size:12px;color:var(--studio-muted)}.ns-stack{display:grid;gap:14px}.ns-details{border:1px solid var(--studio-border);background:var(--studio-surface);padding:0 18px}.ns-details summary{cursor:pointer;padding:18px 0;font-weight:600}.ns-details-content{padding:0 0 18px;color:var(--studio-muted);line-height:1.65}.ns-cart-item{display:grid;grid-template-columns:88px 1fr auto;gap:16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--studio-border)}.ns-cart-item img{width:88px;height:88px;object-fit:cover}.ns-cart-summary{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-top:24px}.ns-reviews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.ns-review{padding:22px;border:1px solid var(--studio-border);background:var(--studio-surface)}.grid-split{grid-template-columns:1fr 1fr!important}.md-flex{display:flex!important}.md-hide{display:none!important}@media(max-width:900px){.ns-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ns-reviews{grid-template-columns:1fr 1fr}}@media(max-width:760px){.grid-split,.ns-product-hero-grid{grid-template-columns:1fr!important}.md-flex{display:none!important}.md-hide{display:inline-flex!important}.ns-header-links{display:none}.ns-header-mobile{display:block}.ns-header-grid{grid-template-columns:1fr auto}.ns-header-grid>.ns-header-links-left{display:none}.ns-product-grid,.ns-reviews{grid-template-columns:1fr}.ns-cart-item{grid-template-columns:72px 1fr}.ns-cart-item> :last-child{grid-column:2}.ns-cart-summary{align-items:stretch;flex-direction:column}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.studio-export-motion{opacity:1!important;transform:none!important;clip-path:none!important;transition:none!important}}
 `;
 }
 
@@ -921,15 +896,56 @@ function buildProductCardSnippet(): string {
 `;
 }
 
-function buildFallbackHeader(project: Project): string {
+function buildNativeHeader(project: Project, sourceSection?: SiteSection): string {
   const links = project.pages.map((page) => `<a href="${shopifyPageUrl(page)}">${escapeHtml(page.name)}</a>`).join('');
-  return `<header class="ns-native-section" style="padding-top:20px;padding-bottom:20px"><div class="ns-container" style="display:flex;align-items:center;justify-content:space-between;gap:24px"><a href="{{ routes.root_url }}" style="font-weight:700;text-decoration:none">${escapeHtml(project.business.businessName || project.name)}</a><nav style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">${links}<a href="{{ routes.cart_url }}">${project.business.direction === 'rtl' ? 'סל' : 'Cart'} ({{ cart.item_count }})</a></nav></div></header>
+  const brand = escapeHtml(project.business.businessName || project.name);
+  const monogram = escapeHtml(
+    (project.business.businessName || project.name)
+      .split(/\\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase()
+  );
+  const centered = sourceSection?.componentRegistryId === 'nav-centered-luxury-01';
+  const componentId = escapeHtml(sourceSection?.componentRegistryId || 'shopify-native-header');
+  return centered
+    ? `<header class="ns-shopify-header ns-shopify-header-centered" data-component-id="${componentId}">
+  <div class="ns-container ns-header-grid">
+    <nav class="ns-header-links ns-header-links-left">${links}</nav>
+    <a class="ns-header-brand" href="{{ routes.root_url }}"><span class="ns-header-monogram">${monogram}</span><span>${brand}</span></a>
+    <div class="ns-header-actions"><a href="{{ routes.cart_url }}">${project.business.direction === 'rtl' ? 'סל' : 'Cart'} ({{ cart.item_count }})</a><details class="ns-header-mobile"><summary aria-label="Menu">☰</summary><nav>${links}<a href="{{ routes.cart_url }}">${project.business.direction === 'rtl' ? 'סל קניות' : 'Cart'}</a></nav></details></div>
+  </div>
+</header>
+{% schema %}{"name":"Natanel Header","settings":[]}{% endschema %}
+`
+    : `<header class="ns-shopify-header" data-component-id="${componentId}">
+  <div class="ns-container ns-header-row">
+    <a class="ns-header-brand" href="{{ routes.root_url }}">${brand}</a>
+    <nav class="ns-header-links">${links}</nav>
+    <div class="ns-header-actions"><a href="{{ routes.cart_url }}">${project.business.direction === 'rtl' ? 'סל' : 'Cart'} ({{ cart.item_count }})</a><details class="ns-header-mobile"><summary aria-label="Menu">☰</summary><nav>${links}<a href="{{ routes.cart_url }}">${project.business.direction === 'rtl' ? 'סל קניות' : 'Cart'}</a></nav></details></div>
+  </div>
+</header>
 {% schema %}{"name":"Natanel Header","settings":[]}{% endschema %}
 `;
 }
 
-function buildFallbackFooter(project: Project): string {
-  return `<footer class="ns-native-section" style="padding-top:30px;padding-bottom:30px"><div class="ns-container" style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap"><strong>${escapeHtml(project.business.businessName || project.name)}</strong><span>© {{ 'now' | date: '%Y' }} {{ shop.name }}</span></div></footer>
+function buildNativeFooter(project: Project, sourceSection?: SiteSection): string {
+  const brand = escapeHtml(project.business.businessName || project.name);
+  const componentId = escapeHtml(sourceSection?.componentRegistryId || 'shopify-native-footer');
+  const contact = [
+    project.business.email ? `<a href="mailto:${escapeHtml(project.business.email)}">${escapeHtml(project.business.email)}</a>` : '',
+    project.business.phone ? `<a href="tel:${escapeHtml(project.business.phone)}">${escapeHtml(project.business.phone)}</a>` : '',
+  ].filter(Boolean).join('<span aria-hidden="true"> · </span>');
+  const pageLinks = project.pages.map((page) => `<a href="${shopifyPageUrl(page)}">${escapeHtml(page.name)}</a>`).join('');
+  return `<footer class="ns-shopify-footer" data-component-id="${componentId}">
+  <div class="ns-container">
+    <div class="ns-footer-top"><strong>${brand}</strong><nav class="ns-footer-links">${pageLinks}</nav></div>
+    ${contact ? `<div class="ns-footer-contact">${contact}</div>` : ''}
+    <div class="ns-footer-legal"><span>© {{ 'now' | date: '%Y' }} {{ shop.name }}</span><a href="{{ shop.privacy_policy.url }}">${project.business.direction === 'rtl' ? 'מדיניות פרטיות' : 'Privacy'}</a><a href="{{ shop.terms_of_service.url }}">${project.business.direction === 'rtl' ? 'תנאי שימוש' : 'Terms'}</a></div>
+  </div>
+</footer>
 {% schema %}{"name":"Natanel Footer","settings":[]}{% endschema %}
 `;
 }
