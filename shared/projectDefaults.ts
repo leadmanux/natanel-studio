@@ -72,7 +72,7 @@ export function applyProjectTypeDefaults(
     brand: {
       ...project.brand,
       ecommerceMode: defaults.ecommerceMode,
-      contentDensity: project.brand.contentDensity || defaults.contentDensity,
+      contentDensity: preserve && project.brand.contentDensity ? project.brand.contentDensity : defaults.contentDensity,
     },
     strategy: {
       ...project.strategy,
