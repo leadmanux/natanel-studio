@@ -149,6 +149,11 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
 .workflow-context-bar button { border: 0; background: transparent; color: #686870; cursor: pointer; font-size: 10.5px; padding: 4px 6px; }
 .workflow-context-bar button:hover { color: #c9c9cd; }
 
+.step-guide-banner { margin-bottom: 22px; border: 1px solid #2a2a2f; background: #121215; padding: 13px 15px; display: flex; align-items: flex-start; gap: 14px; }
+.step-guide-banner > span { flex: 0 0 auto; border: 1px solid #35353a; background: #1a1a1d; color: #9c9ca3; padding: 4px 7px; font-size: 9px; font-weight: 700; letter-spacing: .1em; }
+.step-guide-banner strong { display: block; font-size: 13px; color: #eeeeeb; }
+.step-guide-banner p { margin: 4px 0 0; color: #77777f; font-size: 11.5px; line-height: 1.5; }
+
 .guided-step { display: flex; flex-direction: column; gap: 24px; }
 .guided-step-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; flex-wrap: wrap; }
 .guided-step-header h2 { margin-top: 7px; }
