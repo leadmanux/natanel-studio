@@ -9,7 +9,35 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import type { Project } from '@shared/project';
+import { syncReferenceAssetsIntoProject } from '@shared/referenceAssetSync';
 import { db } from './firebase';
+
+function normalizeProject(project: Project): Project {
+  return syncReferenceAssetsIntoProject({
+    ...project,
+    brand: {
+      ...project.brand,
+      referenceAssets: project.brand?.referenceAssets || [],
+      logoAssets: project.brand?.logoAssets || [],
+    },
+    assets: project.assets || [],
+  });
+}
+
+function projectForPersistence(project: Project): Project {
+  const normalized = normalizeProject(project);
+  return {
+    ...normalized,
+    brand: {
+      ...normalized.brand,
+      // Data-URL logos are already stored once in referenceAssets.
+      logoAssets: (normalized.brand.logoAssets || []).filter((value) => !value.startsWith('data:')),
+    },
+    // Uploaded references are recreated as runtime assets on load. Avoid persisting
+    // a second copy of every base64 image and exhausting browser/Firestore limits.
+    assets: (normalized.assets || []).filter((asset) => asset.source !== 'uploaded'),
+  };
+}
 
 export interface ProjectRepository {
   list(): Promise<Project[]>;
@@ -27,18 +55,18 @@ class FirestoreProjectRepository implements ProjectRepository {
   async list(): Promise<Project[]> {
     const database = this.requireDb();
     const snapshot = await getDocs(query(collection(database, 'projects'), orderBy('updatedAt', 'desc')));
-    return snapshot.docs.map((item) => item.data() as Project);
+    return snapshot.docs.map((item) => normalizeProject(item.data() as Project));
   }
 
   async get(id: string): Promise<Project | null> {
     const database = this.requireDb();
     const snapshot = await getDoc(doc(database, 'projects', id));
-    return snapshot.exists() ? (snapshot.data() as Project) : null;
+    return snapshot.exists() ? normalizeProject(snapshot.data() as Project) : null;
   }
 
   async save(project: Project): Promise<void> {
     const database = this.requireDb();
-    await setDoc(doc(database, 'projects', project.id), project, { merge: true });
+    await setDoc(doc(database, 'projects', project.id), projectForPersistence(project), { merge: true });
   }
 
   async remove(id: string): Promise<void> {
@@ -52,11 +80,18 @@ class LocalProjectRepository implements ProjectRepository {
 
   private read(): Project[] {
     const raw = localStorage.getItem(this.key);
-    return raw ? (JSON.parse(raw) as Project[]) : [];
+    return raw ? (JSON.parse(raw) as Project[]).map(normalizeProject) : [];
   }
 
   private write(projects: Project[]) {
-    localStorage.setItem(this.key, JSON.stringify(projects));
+    try {
+      localStorage.setItem(this.key, JSON.stringify(projects.map(projectForPersistence)));
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        throw new Error('Project storage is full. Remove unused uploaded references or enable Firebase persistence before adding more large images.');
+      }
+      throw error;
+    }
   }
 
   async list() {
@@ -69,9 +104,10 @@ class LocalProjectRepository implements ProjectRepository {
 
   async save(project: Project) {
     const projects = this.read();
+    const normalized = normalizeProject(project);
     const index = projects.findIndex((item) => item.id === project.id);
-    if (index >= 0) projects[index] = project;
-    else projects.push(project);
+    if (index >= 0) projects[index] = normalized;
+    else projects.push(normalized);
     this.write(projects);
   }
 

@@ -26,8 +26,15 @@ export class GeminiComponentSelector implements ComponentSelectorService {
   }
 
   async selectDetailed(project: Project, candidates: ComponentDefinition[]): Promise<ComponentSelectionItem[]> {
-    // Enforce mandate: Only APPROVED components may be automatically selected by the website generation agent
+    // Enforce mandate: Only APPROVED components may be automatically selected by the website generation agent.
     const approvedCandidates = candidates.filter((c) => c.status === 'approved');
+
+    // Shopify currently has a deliberately small canonical commerce pack. A deterministic,
+    // fact-aware blueprint is safer than allowing the model to fill gaps with service/forms
+    // components that belong to business websites.
+    if (project.projectType === 'shopify') {
+      return this.selectShopifyAlgorithmically(project, approvedCandidates);
+    }
 
     if (this.ai) {
       try {
@@ -136,6 +143,157 @@ Return a structured JSON list of section selections that form a cohesive page ex
         ...item,
         motionPreset: normalizeStudioMotionPreset(item.motionPreset),
       }));
+  }
+
+  private selectShopifyAlgorithmically(
+    project: Project,
+    approvedCandidates: ComponentDefinition[]
+  ): ComponentSelectionItem[] {
+    const byId = new Map(approvedCandidates.map((component) => [component.id, component]));
+    const pages = project.strategy.requiredPages.length > 0
+      ? project.strategy.requiredPages
+      : ['Home', 'Shop', 'Product', 'About'];
+    const hasProduct = Boolean(project.facts.products[0]?.name && project.facts.products[0]?.price);
+    const hasProductSpecs = Boolean(project.facts.products[0]?.specs?.length);
+    const hasReviews = Boolean(project.facts.reviewSummary?.score && project.facts.reviewSummary?.totalReviews);
+    const hasTestimonials = Boolean(project.facts.testimonials?.length);
+    const results: ComponentSelectionItem[] = [];
+
+    const push = (
+      page: string,
+      componentId: string,
+      purpose: string,
+      reason: string,
+      motionPreset: string
+    ) => {
+      const component = byId.get(componentId);
+      if (!component) return;
+      results.push({
+        page,
+        sectionPurpose: purpose,
+        componentRegistryId: componentId,
+        reason,
+        contentRequirements: [],
+        imageRequirements: component.imageRequirements.map(
+          (req) => `${req.slot} (${req.aspectRatio}): ${req.purpose}`
+        ),
+        motionPreset: normalizeStudioMotionPreset(motionPreset),
+      });
+    };
+
+    for (const page of pages) {
+      const key = page.toLowerCase();
+      push(
+        page,
+        'nav-centered-luxury-01',
+        'Store Navigation',
+        'Shopify-safe global navigation with native RTL support.',
+        'fadeSettle'
+      );
+
+      if (key === 'home' || key.includes('landing')) {
+        if (hasProduct) {
+          push(
+            page,
+            'hero-product-commerce-01',
+            'Primary Product Hero',
+            'Uses verified product name and price with the uploaded primary product image.',
+            'clipReveal'
+          );
+        } else {
+          push(
+            page,
+            'hero-minimal-luxury-01',
+            'Brand Hero',
+            'Safe brand-first fallback until verified product facts are supplied.',
+            'clipReveal'
+          );
+        }
+        if (hasProductSpecs) {
+          push(
+            page,
+            'ecommerce-detail-accordion-01',
+            'Product Details',
+            'Uses only verified product details entered in Setup.',
+            'fadeSettle'
+          );
+        }
+        if (hasReviews) {
+          push(
+            page,
+            'cro-review-summary-01',
+            'Verified Review Summary',
+            'Shown only because verified review-summary facts are present.',
+            'none'
+          );
+        }
+        if (hasTestimonials) {
+          push(
+            page,
+            'testimonials-review-carousel-01',
+            'Verified Customer Reviews',
+            'Shown only because verified testimonial facts are present.',
+            'fadeSettle'
+          );
+        }
+      } else if (key.includes('shop') || key.includes('catalog') || key.includes('collection')) {
+        if (project.facts.products.length > 0) {
+          push(
+            page,
+            'ecommerce-product-grid-01',
+            'Product Collection',
+            'Maps verified project products into a Shopify-safe product grid.',
+            'imageScaleOnScroll'
+          );
+        }
+      } else if (key.includes('product')) {
+        if (hasProduct) {
+          push(
+            page,
+            'hero-product-commerce-01',
+            'Product Purchase Hero',
+            'Uses verified commerce facts and real uploaded product imagery.',
+            'clipReveal'
+          );
+        }
+        if (hasProductSpecs) {
+          push(
+            page,
+            'ecommerce-detail-accordion-01',
+            'Verified Product Details',
+            'Populates product details only from verified Setup facts.',
+            'fadeSettle'
+          );
+        }
+        if (hasReviews) {
+          push(
+            page,
+            'cro-review-summary-01',
+            'Verified Review Summary',
+            'Shown only because review-summary facts are present.',
+            'none'
+          );
+        }
+      } else {
+        push(
+          page,
+          'hero-minimal-luxury-01',
+          'Brand Story Hero',
+          'A neutral Shopify-compatible brand section without service-business assumptions.',
+          'fadeReveal'
+        );
+      }
+
+      push(
+        page,
+        'footer-minimal-legal-01',
+        'Store Footer',
+        'Shopify-safe legal footer without architectural or consultation-specific copy.',
+        'none'
+      );
+    }
+
+    return results;
   }
 
   private selectAlgorithmically(project: Project, approvedCandidates: ComponentDefinition[]): ComponentSelectionItem[] {

@@ -15,6 +15,7 @@ import {
   renderExactExportSection,
 } from './renderExportSection';
 import { exportStore } from './exportStore';
+import { getPublicProjectDescription } from '../../../shared/publicProjectContent';
 
 export class ReactSourceExporter implements SiteExporter {
   id = 'react' as const;
@@ -202,7 +203,7 @@ function writeProjectFiles(
   const lang = languageCode(project.business.language);
   zip.file(
     'index.html',
-    `<!doctype html><html lang="${escapeHtml(lang)}" dir="${project.business.direction}"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${escapeHtml(project.business.businessName || project.name)}</title><meta name="description" content="${escapeHtml(project.business.description || '')}"/></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>`
+    `<!doctype html><html lang="${escapeHtml(lang)}" dir="${project.business.direction}"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${escapeHtml(project.business.businessName || project.name)}</title><meta name="description" content="${escapeHtml(getPublicProjectDescription(project))}"/></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>`
   );
   zip.file('public/_redirects', '/* /index.html 200\n');
 
@@ -214,7 +215,7 @@ function writeProjectFiles(
   zip.file('src/siteData.ts', `export const siteData = ${JSON.stringify({
     business: {
       name: project.business.businessName || project.name,
-      description: project.business.description,
+      description: getPublicProjectDescription(project),
       direction: project.business.direction,
       language: project.business.language,
     },

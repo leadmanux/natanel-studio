@@ -32,9 +32,14 @@ export function AssetPlannerView({ project, onUpdateProject }: AssetPlannerViewP
     setPlannerError(null);
     try {
       const planned = await requestAssetPlan(project);
+      const uploadedAssets = (project.assets || []).filter((asset) => asset.source === 'uploaded');
+      const uploadedIds = new Set(uploadedAssets.map((asset) => asset.id));
       const updated: Project = {
         ...project,
-        assets: planned,
+        assets: [
+          ...uploadedAssets,
+          ...planned.filter((asset) => !uploadedIds.has(asset.id)),
+        ],
       };
       onUpdateProject(updated);
     } catch (err: any) {
@@ -80,9 +85,15 @@ export function AssetPlannerView({ project, onUpdateProject }: AssetPlannerViewP
 
       onUpdateProject({ ...project, assets: updatedAssets });
     } catch (err: any) {
-      setGenerationErrors((prev) => ({ ...prev, [asset.id]: err.message || 'Image generation failed.' }));
-      const failedAssets = assets.map((a) => (a.id === asset.id ? { ...a, status: 'failed' as const } : a));
-      onUpdateProject({ ...project, assets: failedAssets });
+      const message = err.message || 'Image generation failed.';
+      const quotaBlocked = /quota|allowance|IMAGE_QUOTA_EXHAUSTED/i.test(message);
+      setGenerationErrors((prev) => ({ ...prev, [asset.id]: message }));
+      const nextAssets = assets.map((a) =>
+        a.id === asset.id
+          ? { ...a, status: quotaBlocked ? ('planned' as const) : ('failed' as const) }
+          : a
+      );
+      onUpdateProject({ ...project, assets: nextAssets });
     } finally {
       setGeneratingAssetId(null);
     }
@@ -173,10 +184,12 @@ export function AssetPlannerView({ project, onUpdateProject }: AssetPlannerViewP
                     Page: <strong>{asset.pageId || 'Home'}</strong> • Section: <strong>{asset.sectionId}</strong>
                   </div>
 
-                  <div className="asset-prompt-box">
-                    <span className="box-title">Photographic Prompt:</span>
-                    <p className="prompt-text">{asset.prompt}</p>
-                  </div>
+                  {asset.prompt && (
+                    <div className="asset-prompt-box">
+                      <span className="box-title">Photographic Prompt:</span>
+                      <p className="prompt-text">{asset.prompt}</p>
+                    </div>
+                  )}
 
                   {asset.visualConsistencyInstructions && (
                     <div className="consistency-box">
@@ -192,19 +205,25 @@ export function AssetPlannerView({ project, onUpdateProject }: AssetPlannerViewP
                   )}
 
                   <div className="asset-card-actions">
-                    <button
-                      className="primary-button full-width"
-                      disabled={isGenerating}
-                      onClick={() => handleGenerateAsset(asset)}
-                    >
-                      {isGenerating ? (
-                        <><RefreshCw size={14} className="spin" /> Generating via Gemini 3.1 Flash Image...</>
-                      ) : asset.outputUrl ? (
-                        <><RefreshCw size={14} /> Regenerate Image</>
-                      ) : (
-                        <><Sparkles size={14} /> Generate with gemini-3.1-flash-image</>
-                      )}
-                    </button>
+                    {asset.source === 'uploaded' ? (
+                      <div className="success-banner">
+                        <CheckCircle2 size={14} /> Uploaded reference is approved and ready for the site.
+                      </div>
+                    ) : (
+                      <button
+                        className="primary-button full-width"
+                        disabled={isGenerating}
+                        onClick={() => handleGenerateAsset(asset)}
+                      >
+                        {isGenerating ? (
+                          <><RefreshCw size={14} className="spin" /> Generating via Gemini 3.1 Flash Image...</>
+                        ) : asset.outputUrl ? (
+                          <><RefreshCw size={14} /> Regenerate Image</>
+                        ) : (
+                          <><Sparkles size={14} /> Generate with gemini-3.1-flash-image</>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>

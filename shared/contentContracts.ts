@@ -879,8 +879,8 @@ export const componentContentContracts: Record<string, ComponentContentContract>
     factualClaimFields: ['products'],
     generatedCopyFields: ['eyebrow', 'headline', 'subtitle'],
     assetSlots: [
-      { slot: 'prod_0', purpose: 'Product specimen 1 photography', aspectRatio: '1:1', required: true },
-      { slot: 'prod_1', purpose: 'Product specimen 2 photography', aspectRatio: '1:1', required: true },
+      { slot: 'prod_0', purpose: 'Primary product photography', aspectRatio: '1:1', required: true },
+      { slot: 'prod_1', purpose: 'Secondary product photography', aspectRatio: '1:1', required: false },
     ],
   },
   'ecommerce-detail-accordion-01': {

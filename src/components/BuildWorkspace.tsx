@@ -336,6 +336,26 @@ export function BuildWorkspace({
     updateSection(currentPage.id, currentSection.id, (section) => ({ ...section, contentApproved: true }));
   };
 
+  const handleApproveAllReady = () => {
+    let approvedCount = 0;
+    const pages = project.pages.map((page) => ({
+      ...page,
+      sections: page.sections.map((section) => {
+        if (sectionReady(section) && !section.contentApproved) {
+          approvedCount += 1;
+          return { ...section, contentApproved: true };
+        }
+        return section;
+      }),
+    }));
+    if (!approvedCount) {
+      setMessage('No additional ready sections need approval.');
+      return;
+    }
+    onUpdateProject({ ...project, pages, updatedAt: new Date().toISOString() });
+    setMessage(`Approved ${approvedCount} ready section${approvedCount === 1 ? '' : 's'}. Sections with missing facts or assets remain blocked.`);
+  };
+
   const handleMotion = (preset: StudioMotionPreset) => {
     if (!currentPage || !currentSection) return;
     updateSection(currentPage.id, currentSection.id, (section) => ({ ...section, motionPreset: normalizeStudioMotionPreset(preset), contentApproved: false }));
@@ -343,6 +363,15 @@ export function BuildWorkspace({
 
   const eligibleAssets = project.assets.filter((asset) => (asset.status === 'approved' || asset.status === 'generated') && asset.outputUrl);
   const canApprove = Boolean(currentSection && sectionReady(currentSection));
+  const eligibleComponentIds = new Set(eligibleComponents.map((component) => component.id));
+  const incompatibleSectionCount = project.pages.reduce(
+    (total, page) => total + page.sections.filter((section) => !eligibleComponentIds.has(section.componentRegistryId)).length,
+    0
+  );
+  const readyUnapprovedCount = project.pages.reduce(
+    (total, page) => total + page.sections.filter((section) => sectionReady(section) && !section.contentApproved).length,
+    0
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 820, background: '#09090b', color: '#e4e4e7' }}>
@@ -361,8 +390,14 @@ export function BuildWorkspace({
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {registryOffline && <span style={{ color: '#f59e0b', fontSize: 10 }}>OFFLINE REGISTRY CACHE</span>}
+          {project.projectType === 'shopify' && incompatibleSectionCount > 0 && (
+            <button onClick={handlePlan} disabled={isPlanning} style={{ border: '1px solid #8a5a16', background: '#2a1b08', color: '#f7c56a', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>
+              REPAIR SHOPIFY PLAN ({incompatibleSectionCount})
+            </button>
+          )}
           <button onClick={() => setShowFacts(true)} style={{ border: '1px solid #303038', background: '#18181d', color: '#d4d4d8', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', fontSize: 11 }}><Database size={13} /> Verified Facts</button>
           <button onClick={handleCompose} disabled={isComposing || isPlanning} style={{ border: 'none', background: '#2563eb', color: '#fff', padding: '8px 13px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>{isComposing ? 'Composing…' : project.pages.length ? 'COMPOSE WEBSITE' : 'PLAN SITE'}</button>
+          {readyUnapprovedCount > 0 && <button onClick={handleApproveAllReady} style={{ border: '1px solid #2f5a3c', background: '#14251a', color: '#6ee7a0', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>APPROVE READY ({readyUnapprovedCount})</button>}
           {onProceedToPreview && <button onClick={onProceedToPreview} style={{ border: '1px solid #303038', background: '#18181d', color: '#d4d4d8', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 5, alignItems: 'center', fontSize: 11 }}>Preview <ArrowRight size={12} /></button>}
         </div>
       </div>
@@ -467,7 +502,15 @@ export function BuildWorkspace({
             {!!currentContract?.assetSlots.length && <div style={{ borderTop: '1px solid #25252a', paddingTop: 12, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}><span style={{ fontSize: 10, fontWeight: 700, color: '#85858e' }}>ASSET SLOTS</span>{onProceedToAssets && <button onClick={onProceedToAssets} style={{ border: 0, background: 'transparent', color: '#60a5fa', cursor: 'pointer', fontSize: 9 }}>Open Assets →</button>}</div>
               {currentContract.assetSlots.map((slot) => {
-                const options = eligibleAssets.filter((asset) => asset.aspectRatio === slot.aspectRatio);
+                const semantic = `${slot.slot} ${slot.purpose}`.toLowerCase();
+                const options = eligibleAssets.filter((asset) => {
+                  if (asset.aspectRatio === slot.aspectRatio) return true;
+                  if (asset.source !== 'uploaded') return false;
+                  if (/logo|emblem|brand mark/.test(semantic)) return asset.referenceCategory === 'logo' || asset.type === 'logo';
+                  if (/product|specimen|packshot|detail/.test(semantic)) return asset.referenceCategory === 'product' || asset.referenceCategory === 'packaging';
+                  if (/lifestyle|ugc|portrait|usage|campaign/.test(semantic)) return asset.referenceCategory === 'lifestyle';
+                  return false;
+                });
                 return <div key={slot.slot} style={{ marginBottom: 8 }}>
                   <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#7d7d86', marginBottom: 3 }}><span>{slot.slot}{slot.required ? ' *' : ''}</span><span>{slot.aspectRatio}</span></label>
                   <select value={currentSection.assetBindings?.[slot.slot] || ''} onChange={(event) => handleAssetBinding(slot.slot, event.target.value)} style={{ width: '100%', background: '#151519', color: '#e4e4e7', border: '1px solid #292930', borderRadius: 4, padding: 6, fontSize: 10 }}>

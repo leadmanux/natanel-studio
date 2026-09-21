@@ -6,6 +6,7 @@ import { isStudioMotionPreset } from './studioMotion';
 import { normalizeManualSlug } from './pageSlug';
 import { resolveSectionAssets } from './assetBinding';
 import { evaluateComponentEligibility } from './componentEligibility';
+import { getPublicProjectDescription } from './publicProjectContent';
 import type { ExportValidation, ExportValidationIssue, ExportTarget } from './exportTypes';
 
 /**
@@ -312,10 +313,11 @@ function validateWarnings(
     });
   }
 
-  if (!project.business.description?.trim() || project.business.description.trim().length < 20) {
+  const publicDescription = getPublicProjectDescription(project);
+  if (!publicDescription || publicDescription.length < 20) {
     issues.push({
       code: 'short_seo_description',
-      message: 'Business description is short or missing; search snippets may be weak.',
+      message: 'Public-facing brand/product description is short or missing; search snippets may be weak.',
       severity: 'warning',
     });
   }
@@ -352,7 +354,7 @@ function validateWarnings(
     }
 
     for (const page of project.pages) {
-      const looksLikeProductTemplate = /product/i.test(`${page.name} ${page.slug} ${page.purpose}`);
+      const looksLikeProductTemplate = `${page.name} ${page.slug} ${page.purpose}`.toLowerCase().includes('product');
       for (const section of page.sections || []) {
         if (section.componentRegistryId === 'hero-product-commerce-01' && !looksLikeProductTemplate) {
           issues.push({

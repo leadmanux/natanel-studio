@@ -25,7 +25,12 @@ export function evaluateComponentEligibility(
   const supportedProjectTypes = component.supportedProjectTypes?.length
     ? component.supportedProjectTypes
     : ['both'];
-  if (!supportedProjectTypes.includes('both') && !supportedProjectTypes.includes(project.projectType)) {
+  const explicitProjectTypes = supportedProjectTypes.filter((type) => type !== 'both');
+  const supportsProject =
+    explicitProjectTypes.length > 0
+      ? explicitProjectTypes.includes(project.projectType)
+      : supportedProjectTypes.includes('both');
+  if (!supportsProject) {
     reasons.push(`project type ${project.projectType} is not supported`);
   }
 

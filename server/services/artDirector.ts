@@ -41,7 +41,7 @@ export class GeminiArtDirector implements ArtDirectorService {
 Analyze this project:
 - Business: ${project.business.businessName || 'Bespoke Brand'}
 - Industry: ${project.business.industry || 'Modern Business'}
-- Description: ${project.business.description || 'High-end service provider'}
+- Private project brief (context only, never storefront copy): ${project.business.description || 'No private brief supplied'}
 - Target Audience: ${project.business.targetAudience || 'Discerning clientele'}
 - Primary Conversion Goal: ${project.business.primaryGoal || 'High-intent client inquiries'}
 - Language & Direction: ${project.business.language} (${project.business.direction.toUpperCase()})
@@ -71,6 +71,13 @@ They MUST differ in:
 5. motion philosophy (restrained vs. kinetic physics vs. deliberate ambient)
 6. density (spacious vs. balanced vs. editorial)
 7. visual personality
+
+COMMERCIAL TRUTH MANDATE:
+- Design the conversion structure, not promotional facts.
+- Do NOT invent discounts, bundles, limited-time offers, free gifts, shipping promises, guarantees, warranties, review counts, ratings, certifications, clinical claims, scarcity, stock levels, or price comparisons.
+- If a commercial term is not explicitly present in ProjectFacts or the user brief, leave it out.
+- CROApproach should describe placement and hierarchy (for example: product proof near CTA), not fabricate an offer.
+- Treat the private business brief as context; never recommend exposing internal instructions on the storefront.
 
 ANTI-SLOP MANDATE:
 Do NOT produce generic AI layouts. You must EXPLICITLY enforce rules against:

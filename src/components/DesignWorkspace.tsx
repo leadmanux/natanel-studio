@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import type { Project, ReferenceAnalysis, SiteSection, SitePage } from '@shared/project';
+import type { Project, ReferenceAnalysis } from '@shared/project';
 import { demoComponents } from '@shared/componentRegistry';
-import type { ArtDirectionProposal, ComponentSelectionItem, DesignCriticReport } from '../ai/contracts';
+import type { ArtDirectionProposal, DesignCriticReport } from '../ai/contracts';
 import {
   requestArtDirections,
   requestReferenceAnalysis,
-  requestComponentSelection,
+  requestSitePlan,
   requestDesignCritic,
 } from '../ai/client';
 import {
@@ -53,8 +53,7 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
   const [artDirectorError, setArtDirectorError] = useState<string | null>(null);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
 
-  // Component selection state
-  const [componentSelections, setComponentSelections] = useState<ComponentSelectionItem[]>([]);
+  // Site planning state
   const [isSelectingComponents, setIsSelectingComponents] = useState(false);
   const [selectionError, setSelectionError] = useState<string | null>(null);
 
@@ -187,45 +186,16 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
     setIsSelectingComponents(true);
     setSelectionError(null);
     try {
-      const approvedCandidates = demoComponents.filter((c) => c.status === 'approved');
-      const selections = await requestComponentSelection(project, approvedCandidates);
-      setComponentSelections(selections);
-
-      // Structure sections into project pages
-      const pagesMap = new Map<string, SiteSection[]>();
-      selections.forEach((sel, idx) => {
-        const pageName = sel.page || 'Home';
-        if (!pagesMap.has(pageName)) pagesMap.set(pageName, []);
-        pagesMap.get(pageName)!.push({
-          id: `sec-${idx + 1}-${sel.componentRegistryId}`,
-          name: sel.sectionPurpose,
-          componentRegistryId: sel.componentRegistryId,
-          purpose: sel.sectionPurpose,
-          content: {},
-          assetIds: [],
-          order: idx + 1,
-          reason: sel.reason,
-          contentRequirements: sel.contentRequirements,
-          imageRequirements: sel.imageRequirements,
-          motionPreset: sel.motionPreset,
-        });
-      });
-
-      const updatedPages: SitePage[] = Array.from(pagesMap.entries()).map(([name, sections]) => ({
-        id: `page-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-        name,
-        slug: name === 'Home' ? '/' : `/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-        purpose: `${name} experience for ${project.business.businessName || 'the studio'}`,
-        sections,
-      }));
-
+      const pages = await requestSitePlan(project);
       const updated: Project = {
         ...project,
-        pages: updatedPages,
+        pages,
+        status: 'designing',
+        updatedAt: new Date().toISOString(),
       };
       onUpdateProject(updated);
     } catch (err: any) {
-      setSelectionError(err.message || 'Failed to select components.');
+      setSelectionError(err.message || 'Failed to plan the site structure.');
     } finally {
       setIsSelectingComponents(false);
     }

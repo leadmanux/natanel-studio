@@ -16,6 +16,7 @@ import { WordPressThemeExporter } from './server/services/export/wordpressExport
 import { ReactSourceExporter } from './server/services/export/reactExporter';
 import { ShopifyThemeExporter } from './server/services/export/shopifyExporter';
 import { exportStore } from './server/services/export/exportStore';
+import { getEligibleComponents } from './shared/componentEligibility';
 
 async function startServer() {
   const app = express();
@@ -48,6 +49,13 @@ async function startServer() {
       return res.json(image);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown image generation error.';
+      const quotaExceeded = /429|resource[_ ]?exhausted|quota|allowance\s*0/i.test(message);
+      if (quotaExceeded) {
+        return res.status(429).json({
+          code: 'IMAGE_QUOTA_EXHAUSTED',
+          error: 'Gemini image-generation quota is unavailable for this project. Uploaded product and lifestyle references remain usable as approved site assets, so you can continue building without generating new images.',
+        });
+      }
       return res.status(500).json({ error: message });
     }
   });
@@ -155,8 +163,9 @@ async function startServer() {
         eligibleComponents = canonicalApproved;
       }
 
+      const projectEligible = getEligibleComponents(eligibleComponents, project);
       const selector = new GeminiComponentSelector();
-      const selections = await selector.selectDetailed(project, eligibleComponents);
+      const selections = await selector.selectDetailed(project, projectEligible);
       return res.json({ selections });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to select components.';

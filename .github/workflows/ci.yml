@@ -34,5 +34,7 @@ jobs:
         run: npm run validate:ux
       - name: Validate Shopify Reference Assets
         run: npm run validate:reference-assets
+      - name: Validate Shopify Failed-Run Repair
+        run: npm run validate:shopify-repair
       - name: Build
         run: npm run build
