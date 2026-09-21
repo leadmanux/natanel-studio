@@ -328,7 +328,8 @@ Write production website MARKETING COPY ONLY for one section.
 Project context:
 - Business name: ${project.business.businessName || '(not supplied)'}
 - Industry: ${project.business.industry || '(not supplied)'}
-- Business description supplied by user: ${project.business.description || '(not supplied)'}
+- Private business brief supplied by user (context only; NEVER quote or expose verbatim): ${project.business.description || '(not supplied)'}
+- Verified product facts: ${JSON.stringify(project.facts.products || [])}
 - Audience: ${project.business.targetAudience || '(not supplied)'}
 - Primary goal: ${project.business.primaryGoal || '(not supplied)'}
 - Positioning: ${project.strategy.positioning || '(not supplied)'}
@@ -360,7 +361,9 @@ STRICT RULES:
 - Do not output any field outside the allowed list.
 - Do not invent prices, discounts, product specs, customer names, testimonials, ratings, review totals, metrics, awards, press mentions, licenses, certifications, guarantees, warranty terms, shipping times, addresses, phone numbers, years in business, portfolio projects, or quantified results.
 - Do not invent claims of being certified, insured, award-winning, number one, fastest, guaranteed, or medically effective.
-- Keep copy specific to the supplied business description and positioning without adding unsupported factual claims.
+- Treat the private business brief as instructions/context, not storefront copy. Never paste, paraphrase instruction language, implementation notes, pricing instructions, or internal strategy into public copy.
+- You may use verified ProjectFacts as factual source material, but never alter prices, product names, specs, shipping terms or other supplied facts.
+- Keep copy specific to the brand without adding unsupported factual claims.
 - Avoid generic AI phrases such as "unlock", "revolutionize", "game-changing", "elevate your journey", and "supercharge".
 ${isHebrew ? '- Write native, idiomatic Israeli Hebrew directly. Do not translate English phrasing literally.' : '- Write restrained, natural professional English.'}
 
@@ -392,19 +395,23 @@ Return ONLY a JSON object.`;
   ): Record<string, unknown> {
     const isHebrew = project.business.language.toLowerCase().includes('hebrew') || project.business.direction === 'rtl';
     const businessName = project.business.businessName.trim();
-    const description = project.business.description.trim();
     const positioning = project.strategy.positioning.trim();
     const cta = project.strategy.primaryCTA.trim();
     const id = canonicalId(section.componentRegistryId);
+    const firstProduct = project.facts.products[0];
+    const isShopify = project.projectType === 'shopify';
 
-    const safeHeadline =
-      positioning ||
-      description ||
-      (businessName
-        ? (isHebrew ? `${businessName} — פתרון מקצועי שמתחיל בצרכים שלך` : `${businessName} — built around your brief`)
-        : (isHebrew ? 'פתרון מקצועי שמתחיל בצרכים שלך' : 'A focused solution built around your brief'));
+    const safeHeadline = isShopify
+      ? (firstProduct?.name || businessName || (isHebrew ? 'המוצר שלנו' : 'Our product'))
+      : (positioning ||
+          (businessName
+            ? (isHebrew ? `${businessName} — אתר שמציג את העסק בצורה ברורה` : `${businessName} — a clear digital presence`)
+            : (isHebrew ? 'נוכחות דיגיטלית ברורה ומדויקת' : 'A clear, focused digital presence')));
 
-    const safeBody = description || positioning || '';
+    // Never echo project.business.description here: Setup treats it as a private AI brief.
+    const safeBody = isShopify
+      ? (firstProduct?.description || '')
+      : (positioning || '');
     const result: Record<string, unknown> = {};
 
     const set = (field: string, value: unknown) => {
@@ -424,14 +431,17 @@ Return ONLY a JSON object.`;
     set('eyebrow', project.business.industry || page.name);
     set('kicker', page.name);
     set('chapterLabel', page.name);
-    set('ctaLabel', cta || (isHebrew ? 'יצירת קשר' : 'Contact'));
-    set('ctaText', cta || (isHebrew ? 'לפרטים' : 'Learn more'));
-    set('primaryCtaLabel', cta || (isHebrew ? 'יצירת קשר' : 'Contact'));
-    set('primaryCta', cta || (isHebrew ? 'יצירת קשר' : 'Contact'));
+    const primaryAction = isShopify
+      ? (cta || (isHebrew ? 'לקנייה' : 'Shop now'))
+      : (cta || (isHebrew ? 'יצירת קשר' : 'Contact'));
+    set('ctaLabel', primaryAction);
+    set('ctaText', primaryAction);
+    set('primaryCtaLabel', primaryAction);
+    set('primaryCta', primaryAction);
     set('secondaryCtaLabel', isHebrew ? 'מידע נוסף' : 'Learn more');
     set('secondaryCta', isHebrew ? 'מידע נוסף' : 'Learn more');
-    set('buttonLabel', cta || (isHebrew ? 'שליחת פנייה' : 'Submit'));
-    set('ctaButtonLabel', cta || (isHebrew ? 'יצירת קשר' : 'Contact'));
+    set('buttonLabel', isShopify ? primaryAction : (cta || (isHebrew ? 'שליחת פנייה' : 'Submit')));
+    set('ctaButtonLabel', primaryAction);
     set('formTitle', isHebrew ? 'השאירו פרטים' : 'Tell us about your project');
     set('formSubtitle', isHebrew ? 'נחזור אליכם עם מענה מותאם לפרטים שתמסרו.' : 'Share the essentials and we will follow up based on the information provided.');
     set('trustNote', isHebrew ? 'הפרטים ישמשו לצורך המענה לפנייה.' : 'Your details are used to respond to your inquiry.');
@@ -469,7 +479,9 @@ Return ONLY a JSON object.`;
     if (id.startsWith('nav-')) {
       return {
         links,
-        ctaHref: project.strategy.primaryCTA ? '#contact' : undefined,
+        ctaHref: project.projectType === 'shopify'
+          ? '/collections/all'
+          : (project.strategy.primaryCTA ? '#contact' : undefined),
       };
     }
 
@@ -496,9 +508,10 @@ Return ONLY a JSON object.`;
     }
 
     if (id.startsWith('hero-') || id.startsWith('cta-')) {
+      const href = project.projectType === 'shopify' ? '/collections/all' : '#contact';
       return {
-        ctaHref: '#contact',
-        primaryCtaHref: '#contact',
+        ctaHref: href,
+        primaryCtaHref: href,
       };
     }
 
