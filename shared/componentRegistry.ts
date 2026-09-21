@@ -330,7 +330,7 @@ const rawDemoComponents: ComponentDefinition[] = [
     sourceAuthor: 'Natanel Studio',
     version: '1.0.0',
     renderImplementationId: 'hero-minimal-luxury-01',
-    supportedProjectTypes: ['business_website', 'both'],
+    supportedProjectTypes: ['business_website', 'shopify', 'both'],
     supportedDirections: ['ltr', 'rtl'],
     license: 'Proprietary Studio',
     tags: ['hero', 'luxury', 'restrained', 'minimal'],
