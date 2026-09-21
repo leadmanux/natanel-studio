@@ -1,7 +1,7 @@
 import type { ProjectReferenceAsset, ReferenceAssetCategory } from '@shared/project';
 
-const MAX_DIMENSION = 1600;
-const JPEG_QUALITY = 0.82;
+const MAX_DIMENSION = 1200;
+const JPEG_QUALITY = 0.76;
 
 function readFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
