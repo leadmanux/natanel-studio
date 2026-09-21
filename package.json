@@ -16,6 +16,7 @@
     "validate:reference-store": "tsx scripts/validate-reference-store.ts",
     "validate:ux": "tsx scripts/validate-ux-defaults.ts",
     "validate:reference-assets": "tsx scripts/validate-reference-assets.ts",
+    "validate:shopify-repair": "tsx scripts/validate-shopify-repair.ts",
     "preview": "vite preview"
   },
   "dependencies": {
