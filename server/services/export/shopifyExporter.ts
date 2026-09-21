@@ -17,6 +17,7 @@ import {
   renderExactExportSection,
 } from './renderExportSection';
 import { exportStore } from './exportStore';
+import { getPublicProjectDescription } from '../../../shared/publicProjectContent';
 
 const ASSET_TOKEN_PREFIX = '__NS_SHOPIFY_ASSET__';
 const ASSET_TOKEN_SUFFIX = '__';
@@ -474,7 +475,7 @@ function writeNativeUtilitySections(zip: JSZip) {
 
 function buildThemeLayout(project: Project): string {
   const fallbackTitle = escapeHtml(project.business.businessName || project.name);
-  const fallbackDescription = escapeHtml(project.business.description || '');
+  const fallbackDescription = escapeHtml(getPublicProjectDescription(project));
   const direction = project.business.direction;
   return `<!doctype html>
 <html class="no-js" lang="{{ request.locale.iso_code | default: 'en' }}" dir="${direction}">
