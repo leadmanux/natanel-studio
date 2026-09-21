@@ -1,4 +1,4 @@
-import type { Project, ProjectType, TextDirection } from './project';
+import { createEmptyProject, type Project, type ProjectType, type TextDirection } from './project';
 
 export type SupportedStudioLanguage = 'English' | 'Hebrew';
 
@@ -105,4 +105,16 @@ export function applyLanguage(
       direction: directionForLanguage(language),
     },
   };
+}
+
+
+export function createProjectWithDefaults(
+  id: string,
+  type: ProjectType,
+  name: string,
+  language: SupportedStudioLanguage = 'English'
+): Project {
+  const project = createEmptyProject(id, type, name);
+  const withTypeDefaults = applyProjectTypeDefaults(project, type);
+  return applyLanguage(withTypeDefaults, language);
 }
