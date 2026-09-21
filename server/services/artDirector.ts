@@ -72,6 +72,13 @@ They MUST differ in:
 6. density (spacious vs. balanced vs. editorial)
 7. visual personality
 
+COMMERCIAL TRUTH MANDATE:
+- Design the conversion structure, not promotional facts.
+- Do NOT invent discounts, bundles, limited-time offers, free gifts, shipping promises, guarantees, warranties, review counts, ratings, certifications, clinical claims, scarcity, stock levels, or price comparisons.
+- If a commercial term is not explicitly present in ProjectFacts or the user brief, leave it out.
+- CROApproach should describe placement and hierarchy (for example: product proof near CTA), not fabricate an offer.
+- Treat the private business brief as context; never recommend exposing internal instructions on the storefront.
+
 ANTI-SLOP MANDATE:
 Do NOT produce generic AI layouts. You must EXPLICITLY enforce rules against:
 - Excessive rounded cards (cards within cards)
