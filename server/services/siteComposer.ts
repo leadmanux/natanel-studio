@@ -20,6 +20,7 @@ import { componentAliases } from '../../shared/componentImplementations';
 import { resolveSectionAssets } from '../../shared/assetBinding';
 import { normalizeStudioMotionPreset } from '../../shared/studioMotion';
 import { modelConfig } from '../config/models';
+import { referenceAssetPromptContext, referenceImageParts } from './referenceAssetContext';
 
 const EMPTY_FACTS: ProjectFacts = {
   services: [],
@@ -339,6 +340,16 @@ Project context:
 - Language: ${project.business.language}
 - Direction: ${project.business.direction}
 
+Uploaded visual references, in the same order as the attached images:
+${referenceAssetPromptContext(project, 4)}
+
+VISUAL REFERENCE RULES:
+- Use visible product identity and usage context to make the copy more specific when helpful.
+- Product images may inform visible descriptors such as form factor, finish, color family, packaging style or usage context.
+- Images are NOT evidence for technical specs, medical/beauty efficacy, certifications, performance claims, discounts, materials, ingredients or guarantees unless those facts are also explicitly present in ProjectFacts/user-supplied text.
+- Never invent a feature just because the image resembles a known product.
+- Preserve the distinction between PRODUCT references and LIFESTYLE references.
+
 You may output ONLY these generative copy fields:
 ${allowedFields.join(', ')}
 
@@ -357,7 +368,7 @@ Return ONLY a JSON object.`;
 
     const response = await this.ai.models.generateContent({
       model: modelConfig.fastModel,
-      contents: prompt,
+      contents: [prompt, ...referenceImageParts(project, 4)],
       config: { responseMimeType: 'application/json' },
     });
 
