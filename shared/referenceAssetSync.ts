@@ -46,12 +46,22 @@ function toGeneratedAsset(asset: ProjectReferenceAsset): GeneratedAsset {
  */
 export function syncReferenceAssetsIntoProject(project: Project): Project {
   const references = project.brand.referenceAssets || [];
-  if (!references.length) return project;
-
   const referenceIds = new Set(references.map((asset) => asset.id));
   const nonReferenceAssets = (project.assets || []).filter(
     (asset) => asset.source !== 'uploaded' && !referenceIds.has(asset.id)
   );
+
+  if (!references.length) {
+    return {
+      ...project,
+      brand: {
+        ...project.brand,
+        referenceAssets: [],
+        logoAssets: (project.brand.logoAssets || []).filter((value) => !value.startsWith('data:')),
+      },
+      assets: nonReferenceAssets,
+    };
+  }
   const categoryPriority = { product: 0, lifestyle: 1, packaging: 2, logo: 3, inspiration: 4 } as const;
   const orderedReferences = [...references].sort((a, b) => {
     if (Boolean(a.isPrimary) !== Boolean(b.isPrimary)) return a.isPrimary ? -1 : 1;
