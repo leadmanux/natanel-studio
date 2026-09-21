@@ -208,6 +208,7 @@ export default function App() {
         <header className="topbar">
           <div>
             <div className="eyebrow">NATANEL STUDIO</div>
+            <div className="sync-version-badge">GUIDED UX V1 · 6-STEP WORKFLOW</div>
             <h1>Build a complete website in six clear steps.</h1>
           </div>
           <button className="primary-button" onClick={() => setIsNewProjectModalOpen(true)}>

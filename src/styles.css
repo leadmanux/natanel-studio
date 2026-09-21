@@ -27,6 +27,8 @@ button { font: inherit; }
 .eyebrow { color: #77777d; font-size: 10px; letter-spacing: .16em; font-weight: 700; text-transform: uppercase; }
 h1 { margin: 8px 0 0; font-size: clamp(32px, 4vw, 54px); letter-spacing: -.05em; max-width: 800px; line-height: 1.05; font-weight: 580; }
 
+.sync-version-badge { display: inline-flex; margin-top: 9px; padding: 5px 8px; border: 1px solid #5f4b1f; background: #1a160d; color: #e5b95c; font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+
 .primary-button { border: 1px solid #e8e8e4; color: #101011; background: #f1f1ee; padding: 10px 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 550; transition: opacity .15s ease; }
 .primary-button:hover:not(:disabled) { opacity: 0.9; }
 .primary-button:disabled { opacity: 0.45; cursor: not-allowed; }
