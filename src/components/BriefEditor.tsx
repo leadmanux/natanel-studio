@@ -219,29 +219,21 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
             </div>
           </div>
 
-          <div className="language-choice-row">
-            <label className={`language-choice ${language === 'English' ? 'active' : ''}`}>
-              <input
-                type="radio"
-                name="studio-language"
-                value="English"
-                checked={language === 'English'}
-                onChange={() => setLanguage('English')}
-              />
-              <strong>English</strong>
-              <span>Left-to-right layout</span>
-            </label>
-            <label className={`language-choice ${language === 'Hebrew' ? 'active' : ''}`}>
-              <input
-                type="radio"
-                name="studio-language"
-                value="Hebrew"
-                checked={language === 'Hebrew'}
-                onChange={() => setLanguage('Hebrew')}
-              />
-              <strong>Hebrew</strong>
-              <span>RTL automatically enabled</span>
-            </label>
+          <div className="language-select-row">
+            <div className="field-group">
+              <label>Website Language</label>
+              <select
+                value={language}
+                onChange={(event) => setLanguage(event.target.value as SupportedStudioLanguage)}
+              >
+                <option value="English">English</option>
+                <option value="Hebrew">Hebrew</option>
+              </select>
+            </div>
+            <div className="auto-setting-box">
+              <strong>{directionForLanguage(language).toUpperCase()}</strong>
+              <span>{language === 'Hebrew' ? 'RTL is enabled automatically.' : 'LTR is enabled automatically.'}</span>
+            </div>
           </div>
         </section>
 
