@@ -366,9 +366,16 @@ ${isHebrew ? '- Write native, idiomatic Israeli Hebrew directly. Do not translat
 
 Return ONLY a JSON object.`;
 
+    const shouldInspectVisualReferences =
+      project.projectType === 'shopify' &&
+      /(product|ecommerce|commerce)/i.test(section.componentRegistryId);
+
     const response = await this.ai.models.generateContent({
       model: modelConfig.fastModel,
-      contents: [prompt, ...referenceImageParts(project, 4)],
+      contents: [
+        prompt,
+        ...(shouldInspectVisualReferences ? referenceImageParts(project, 4) : []),
+      ],
       config: { responseMimeType: 'application/json' },
     });
 
