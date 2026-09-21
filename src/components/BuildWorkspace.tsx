@@ -336,6 +336,26 @@ export function BuildWorkspace({
     updateSection(currentPage.id, currentSection.id, (section) => ({ ...section, contentApproved: true }));
   };
 
+  const handleApproveAllReady = () => {
+    let approvedCount = 0;
+    const pages = project.pages.map((page) => ({
+      ...page,
+      sections: page.sections.map((section) => {
+        if (sectionReady(section) && !section.contentApproved) {
+          approvedCount += 1;
+          return { ...section, contentApproved: true };
+        }
+        return section;
+      }),
+    }));
+    if (!approvedCount) {
+      setMessage('No additional ready sections need approval.');
+      return;
+    }
+    onUpdateProject({ ...project, pages, updatedAt: new Date().toISOString() });
+    setMessage(`Approved ${approvedCount} ready section${approvedCount === 1 ? '' : 's'}. Sections with missing facts or assets remain blocked.`);
+  };
+
   const handleMotion = (preset: StudioMotionPreset) => {
     if (!currentPage || !currentSection) return;
     updateSection(currentPage.id, currentSection.id, (section) => ({ ...section, motionPreset: normalizeStudioMotionPreset(preset), contentApproved: false }));
@@ -343,6 +363,10 @@ export function BuildWorkspace({
 
   const eligibleAssets = project.assets.filter((asset) => (asset.status === 'approved' || asset.status === 'generated') && asset.outputUrl);
   const canApprove = Boolean(currentSection && sectionReady(currentSection));
+  const readyUnapprovedCount = project.pages.reduce(
+    (total, page) => total + page.sections.filter((section) => sectionReady(section) && !section.contentApproved).length,
+    0
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 820, background: '#09090b', color: '#e4e4e7' }}>
@@ -363,6 +387,7 @@ export function BuildWorkspace({
           {registryOffline && <span style={{ color: '#f59e0b', fontSize: 10 }}>OFFLINE REGISTRY CACHE</span>}
           <button onClick={() => setShowFacts(true)} style={{ border: '1px solid #303038', background: '#18181d', color: '#d4d4d8', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', fontSize: 11 }}><Database size={13} /> Verified Facts</button>
           <button onClick={handleCompose} disabled={isComposing || isPlanning} style={{ border: 'none', background: '#2563eb', color: '#fff', padding: '8px 13px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>{isComposing ? 'Composing…' : project.pages.length ? 'COMPOSE WEBSITE' : 'PLAN SITE'}</button>
+          {readyUnapprovedCount > 0 && <button onClick={handleApproveAllReady} style={{ border: '1px solid #2f5a3c', background: '#14251a', color: '#6ee7a0', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>APPROVE READY ({readyUnapprovedCount})</button>}
           {onProceedToPreview && <button onClick={onProceedToPreview} style={{ border: '1px solid #303038', background: '#18181d', color: '#d4d4d8', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 5, alignItems: 'center', fontSize: 11 }}>Preview <ArrowRight size={12} /></button>}
         </div>
       </div>
