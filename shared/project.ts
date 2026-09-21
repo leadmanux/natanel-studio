@@ -178,7 +178,7 @@ export interface ReferenceAnalysis {
   retrievalStatus?: RetrievalStatus;
   retrievedUrl?: string;
   retrievalNotes?: string;
-  source?: 'ai' | 'deterministic_fallback' | 'uploaded';
+  source?: 'ai' | 'deterministic_fallback';
   screenshots?: { desktop?: string; mobile?: string } | string[];
   summary: string;
   layout: string;
@@ -287,7 +287,8 @@ export interface GeneratedAsset {
   resolution: '0.5K' | '1K' | '2K' | '4K';
   referenceAssets: string[];
   model: string;
-  source?: 'ai' | 'deterministic_fallback';
+  source?: 'ai' | 'deterministic_fallback' | 'uploaded';
+  referenceCategory?: ReferenceAssetCategory;
   status: 'planned' | 'generating' | 'generated' | 'approved' | 'rejected' | 'failed';
   outputUrl?: string;
   createdAt?: string;
