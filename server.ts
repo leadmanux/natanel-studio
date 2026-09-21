@@ -16,6 +16,7 @@ import { WordPressThemeExporter } from './server/services/export/wordpressExport
 import { ReactSourceExporter } from './server/services/export/reactExporter';
 import { ShopifyThemeExporter } from './server/services/export/shopifyExporter';
 import { exportStore } from './server/services/export/exportStore';
+import { getEligibleComponents } from './shared/componentEligibility';
 
 async function startServer() {
   const app = express();
@@ -155,8 +156,9 @@ async function startServer() {
         eligibleComponents = canonicalApproved;
       }
 
+      const projectEligible = getEligibleComponents(eligibleComponents, project);
       const selector = new GeminiComponentSelector();
-      const selections = await selector.selectDetailed(project, eligibleComponents);
+      const selections = await selector.selectDetailed(project, projectEligible);
       return res.json({ selections });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to select components.';
