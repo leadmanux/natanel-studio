@@ -18,7 +18,12 @@ import {
   Sliders,
 } from 'lucide-react';
 import { demoComponents } from '@shared/componentRegistry';
-import { createEmptyProject, type Project, type ProjectType } from '@shared/project';
+import type { Project, ProjectType } from '@shared/project';
+import {
+  applyProjectTypeDefaults,
+  createProjectWithDefaults,
+  PROJECT_TYPE_DEFAULTS,
+} from '@shared/projectDefaults';
 import { createShopifyReferenceProject } from '@shared/referenceShopifyProject';
 import { projectRepository } from './data/projectRepository';
 import { BriefEditor } from './components/BriefEditor';
@@ -32,15 +37,45 @@ import { SitePreviewView } from './components/SitePreviewView';
 import { StandalonePreviewView } from './components/StandalonePreviewView';
 import { ExportWorkspace } from './components/ExportWorkspace';
 
-const navItems = [
+const primaryNavItems = [
   { label: 'Projects', icon: FolderKanban },
-  { label: 'Component Sandbox', icon: MonitorSmartphone },
-  { label: 'Component Library', icon: Blocks },
-  { label: 'Asset Library', icon: ImageIcon },
   { label: 'Settings', icon: Settings },
 ];
 
-const workspaceTabs = ['Brief', 'Strategy', 'Design', 'Assets', 'Build', 'Preview', 'Review', 'Handoff'];
+const advancedNavItems = [
+  { label: 'Component Library', icon: Blocks },
+  { label: 'Component Sandbox', icon: MonitorSmartphone },
+  { label: 'Asset Library', icon: ImageIcon },
+];
+
+const guidedSteps = [
+  { tab: 'Brief', label: 'Setup', help: 'Business, goal & language' },
+  { tab: 'Design', label: 'Design', help: 'Choose the visual direction' },
+  { tab: 'Assets', label: 'Images', help: 'Generate or upload visuals' },
+  { tab: 'Build', label: 'Build', help: 'Pages, sections & content' },
+  { tab: 'Preview', label: 'Preview & QA', help: 'Check desktop and mobile' },
+  { tab: 'Handoff', label: 'Export', help: 'Download the finished site' },
+] as const;
+
+const activeStepForTab: Record<string, number> = {
+  Brief: 0,
+  Strategy: 0,
+  Design: 1,
+  Assets: 2,
+  Build: 3,
+  Preview: 4,
+  Review: 4,
+  Handoff: 5,
+};
+
+const stepInstructions = [
+  'Enter the business basics and choose English or Hebrew. Then continue.',
+  'Generate design directions, choose the one you like, and approve it.',
+  'Generate or upload the images the site needs. Approve the visuals you want to use.',
+  'Generate the pages and sections. Review the content, replace sections if needed, then approve.',
+  'Check desktop and mobile. Fix anything that looks wrong and review the QA summary.',
+  'Run validation, then download the WordPress, React, or Shopify package for this project.',
+] as const;
 
 export default function App() {
   // Check if current route is standalone preview
@@ -54,9 +89,9 @@ export default function App() {
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
 
   // Initialize or load project
-  const [project, setProject] = useState<Project>(() => {
-    return createEmptyProject('demo-project', 'business_website', 'Atelier Kanso Architecture');
-  });
+  const [project, setProject] = useState<Project>(() =>
+    createProjectWithDefaults('demo-project', 'business_website', 'New Business Website', 'English')
+  );
 
   // Load latest project from repository on mount
   useEffect(() => {
@@ -88,12 +123,10 @@ export default function App() {
   };
 
   const setProjectType = (type: ProjectType) => {
-    const updated: Project = {
-      ...project,
-      projectType: type,
-      updatedAt: new Date().toISOString(),
-    };
+    if (type === project.projectType) return;
+    const updated = applyProjectTypeDefaults(project, type);
     handleUpdateProject(updated);
+    setActiveTab('Brief');
   };
 
   const handleLoadShopifyReferenceStore = () => {
@@ -103,28 +136,27 @@ export default function App() {
     setActiveTab('Preview');
   };
 
-  // Determine pipeline steps completion
-  const pipelineSteps = useMemo(() => {
+  const progressSteps = useMemo(() => {
     const hasBrief = Boolean(project.business.businessName && project.business.description);
-    const hasReferences = Boolean(project.brand.referenceAnalyses && project.brand.referenceAnalyses.length > 0);
-    const hasArtDirection = Boolean(project.designSystem.artDirection);
-    const hasComponentPlan = Boolean(project.pages.length > 0 && project.pages.some((p) => p.sections.length > 0));
-    const hasAssetPlan = Boolean(project.assets && project.assets.length > 0);
-    const hasCritic = project.status === 'review' || hasComponentPlan;
-    const hasHandoff = project.status === 'exported' || project.status === 'approved';
+    const hasDesign = Boolean(project.designSystem.artDirection);
+    const hasAssets = Boolean(project.assets.length);
+    const hasBuild = Boolean(project.pages.some((page) => page.sections.length > 0));
+    const hasPreview = hasBuild;
+    const hasExport = project.exportConfig.status === 'complete' || project.status === 'exported';
 
     return [
-      { name: 'Strategic Brief', completed: hasBrief },
-      { name: 'Reference Analysis', completed: hasReferences },
-      { name: 'Art Direction', completed: hasArtDirection },
-      { name: '3 Design Directions', completed: hasArtDirection },
-      { name: 'Direction Approval', completed: hasArtDirection },
-      { name: 'Component Selection', completed: hasComponentPlan },
-      { name: 'Asset Manifest Plan', completed: hasAssetPlan },
-      { name: 'Design Critic Inspection', completed: hasCritic },
-      { name: 'Handoff Export', completed: hasHandoff },
+      { name: 'Setup', completed: hasBrief },
+      { name: 'Design', completed: hasDesign },
+      { name: 'Images', completed: hasAssets },
+      { name: 'Build', completed: hasBuild },
+      { name: 'Preview & QA', completed: hasPreview },
+      { name: 'Export', completed: hasExport },
     ];
   }, [project]);
+
+  const currentStepIndex = activeStepForTab[activeTab] ?? 0;
+  const currentStep = guidedSteps[currentStepIndex];
+  const projectDefaults = PROJECT_TYPE_DEFAULTS[project.projectType];
 
   return (
     <div className="app-shell">
@@ -138,7 +170,7 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map(({ label, icon: Icon }) => (
+          {primaryNavItems.map(({ label, icon: Icon }) => (
             <button
               key={label}
               className={`nav-button ${activeNav === label ? 'active' : ''}`}
@@ -148,6 +180,22 @@ export default function App() {
               <span>{label}</span>
             </button>
           ))}
+
+          <details className="sidebar-advanced">
+            <summary>Advanced tools</summary>
+            <div className="sidebar-advanced-items">
+              {advancedNavItems.map(({ label, icon: Icon }) => (
+                <button
+                  key={label}
+                  className={`nav-button ${activeNav === label ? 'active' : ''}`}
+                  onClick={() => setActiveNav(label)}
+                >
+                  <Icon size={17} strokeWidth={1.6} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </details>
         </nav>
 
         <div className="sidebar-footer">
@@ -159,8 +207,8 @@ export default function App() {
       <main className="main-area">
         <header className="topbar">
           <div>
-            <div className="eyebrow">DESIGN BRAIN V1</div>
-            <h1>Build sites with taste, not templates.</h1>
+            <div className="eyebrow">NATANEL STUDIO</div>
+            <h1>Build a complete website in six clear steps.</h1>
           </div>
           <button className="primary-button" onClick={() => setIsNewProjectModalOpen(true)}>
             <Plus size={17} /> New project
@@ -188,13 +236,13 @@ export default function App() {
           </section>
         ) : activeNav === 'Settings' ? (
           <section className="workspace-card">
-            <div className="canvas-main" style={{ padding: '36px', maxWidth: '820px' }}>
+            <div className="canvas-main" style={{ padding: '36px', maxWidth: '860px' }}>
               <div className="section-intro">
                 <div>
-                  <span className="eyebrow">ENVIRONMENT & ENGINE</span>
-                  <h2>Studio Architecture Settings</h2>
+                  <span className="eyebrow">SETTINGS</span>
+                  <h2>Studio Settings</h2>
                   <p className="section-description">
-                    Server-side AI orchestration running on Gemini with native image synthesis and multi-platform handoff.
+                    Most users never need to touch these. The six-step project workflow already applies the correct defaults.
                   </p>
                 </div>
               </div>
@@ -202,43 +250,37 @@ export default function App() {
               <div className="form-card">
                 <div className="card-header-line">
                   <Sparkles size={16} />
-                  <h3>AI Engine Configuration</h3>
+                  <div>
+                    <h3>AI & Runtime</h3>
+                    <span className="card-help">Technical configuration for the Studio engine.</span>
+                  </div>
                 </div>
                 <div className="detail-item">
-                  <span className="detail-label">Default Image Synthesis Model</span>
-                  <p><code className="code-pill">gemini-3.1-flash-image</code> (Nano Banana 2, Server-side proxy)</p>
+                  <span className="detail-label">Image Model</span>
+                  <p><code className="code-pill">gemini-3.1-flash-image</code></p>
                 </div>
                 <div className="detail-item">
-                  <span className="detail-label">Reasoning & Art Director Engine</span>
-                  <p><code className="code-pill">gemini-2.5-flash</code> with heuristic fallback guarantee</p>
+                  <span className="detail-label">Design / Reasoning Model</span>
+                  <p><code className="code-pill">gemini-2.5-flash</code></p>
                 </div>
                 <div className="detail-item">
-                  <span className="detail-label">Persistence Mode</span>
-                  <p>Local Repository (Browser-safe storage with Firestore abstraction layer)</p>
+                  <span className="detail-label">Storage</span>
+                  <p>Local browser repository with optional Firebase persistence.</p>
                 </div>
-                <div className="detail-item">
-                  <span className="detail-label">RTL Support</span>
-                  <p>First-class Hebrew & Arabic directional layout with typography and component mirroring</p>
-                </div>
-
+              </div>
 
               <div className="form-card" style={{ marginTop: 18 }}>
                 <div className="card-header-line">
                   <ShieldCheck size={16} />
-                  <h3>QA Reference Store</h3>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">End-to-end Shopify test fixture</span>
-                  <p>
-                    Loads a clearly labelled Hebrew RTL reference store with approved sections and local deterministic
-                    assets. Use it to inspect Preview, Builder, Handoff validation and the Shopify ZIP without touching a
-                    client project.
-                  </p>
+                  <div>
+                    <h3>QA Reference Store</h3>
+                    <span className="card-help">Internal test project for validating the Shopify workflow.</span>
+                  </div>
                 </div>
                 <button className="secondary-button" onClick={handleLoadShopifyReferenceStore}>
                   <ShoppingBag size={15} /> Load RTL Shopify Reference Store
                 </button>
-              </div>              </div>
+              </div>
             </div>
           </section>
         ) : (
@@ -257,7 +299,7 @@ export default function App() {
                   )}
                 </div>
                 <div className="muted">
-                  Platform-neutral until handoff • {project.business.industry || 'Architecture & Design'}
+                  {projectDefaults.label} · {project.business.industry || 'Industry not set'} · {project.business.language || 'English'}
                 </div>
               </div>
 
@@ -277,20 +319,46 @@ export default function App() {
               </div>
             </div>
 
-            <div className="tabs">
-              {workspaceTabs.map((tab) => (
-                <button
-                  key={tab}
-                  className={activeTab === tab ? 'active' : ''}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab}
-                </button>
-              ))}
+            <div className="guided-workflow">
+              {guidedSteps.map((step, index) => {
+                const isActive = currentStepIndex === index;
+                const isComplete = progressSteps[index]?.completed;
+                return (
+                  <button
+                    key={step.tab}
+                    type="button"
+                    className={`guided-step-button ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
+                    onClick={() => setActiveTab(step.tab)}
+                  >
+                    <span className="guided-step-number">{isComplete ? '✓' : index + 1}</span>
+                    <span className="guided-step-copy">
+                      <strong>{step.label}</strong>
+                      <small>{step.help}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="workflow-context-bar">
+              <span><strong>Current:</strong> Step {currentStepIndex + 1} of 6 · {currentStep.label}</span>
+              <div>
+                <button type="button" onClick={() => setActiveTab('Strategy')}>View strategy</button>
+                <button type="button" onClick={() => setActiveTab('Review')}>View QA summary</button>
+              </div>
             </div>
 
             <div className="canvas">
               <div className="canvas-main">
+                {activeTab !== 'Brief' && (
+                  <div className="step-guide-banner">
+                    <span>STEP {currentStepIndex + 1} OF 6</span>
+                    <div>
+                      <strong>{currentStep.label}</strong>
+                      <p>{stepInstructions[currentStepIndex]}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. BRIEF TAB */}
                 {activeTab === 'Brief' && (
                   <BriefEditor
@@ -438,40 +506,42 @@ export default function App() {
               </div>
 
               {/* RIGHT INSPECTOR */}
-              <aside className="inspector">
-                <div className="inspector-title">Architecture Pipeline</div>
+              <aside className="inspector guided-inspector">
+                <div className="inspector-title">Your Progress</div>
                 <ol className="pipeline">
-                  {pipelineSteps.map((step, index) => (
-                    <li key={step.name} className={step.completed ? 'completed' : ''}>
+                  {progressSteps.map((step, index) => (
+                    <li
+                      key={step.name}
+                      className={`${step.completed ? 'completed' : ''} ${currentStepIndex === index ? 'current' : ''}`}
+                    >
                       <span>{step.completed ? '✓' : String(index + 1).padStart(2, '0')}</span>
                       <span>{step.name}</span>
                     </li>
                   ))}
                 </ol>
 
-                <div style={{ marginTop: '28px', borderTop: '1px solid #1f1f23', paddingTop: '18px' }}>
-                  <div className="inspector-title">Design System Tokens</div>
-                  <div style={{ display: 'grid', gap: '8px', fontSize: '11.5px', color: '#888890' }}>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Direction</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.designSystem.artDirection || 'Not yet locked'}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Density</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.brand.contentDensity}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Orientation</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.business.direction.toUpperCase()}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Components</span>
-                      <strong style={{ color: '#e0e0dc' }}>
-                        {demoComponents.filter((c) => c.status === 'approved').length} approved in registry
-                      </strong>
-                    </div>
-                  </div>
+                <div className="what-next-card">
+                  <div className="what-next-label">WHAT TO DO NOW</div>
+                  <strong>{currentStep.label}</strong>
+                  <p>{currentStep.help}.</p>
                 </div>
+
+                <div className="project-defaults-card">
+                  <div className="inspector-title">Automatic Defaults</div>
+                  <div><span>Project</span><strong>{projectDefaults.label}</strong></div>
+                  <div><span>Mode</span><strong>{projectDefaults.ecommerceMode === 'ecommerce' ? 'Ecommerce' : 'Lead generation'}</strong></div>
+                  <div><span>Language</span><strong>{project.business.language || 'English'}</strong></div>
+                  <div><span>Direction</span><strong>{project.business.direction.toUpperCase()}</strong></div>
+                  <div><span>Export</span><strong>{projectDefaults.exportTarget === 'shopify' ? 'Shopify Theme' : 'WordPress'}</strong></div>
+                </div>
+
+                <details className="inspector-technical">
+                  <summary>Technical details</summary>
+                  <div>
+                    <span>{demoComponents.filter((component) => component.status === 'approved').length} approved components</span>
+                    <span>{project.designSystem.artDirection || 'Art direction not selected yet'}</span>
+                  </div>
+                </details>
               </aside>
             </div>
           </section>
