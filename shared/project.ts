@@ -27,6 +27,9 @@ export interface ProjectReferenceAsset {
   dataUrl: string;
   notes?: string;
   isPrimary?: boolean;
+  width?: number;
+  height?: number;
+  aspectRatio?: '1:1' | '4:5' | '3:4' | '9:16' | '16:9' | '21:9' | '4:1' | '8:1';
   createdAt: string;
 }
 
@@ -175,7 +178,7 @@ export interface ReferenceAnalysis {
   retrievalStatus?: RetrievalStatus;
   retrievedUrl?: string;
   retrievalNotes?: string;
-  source?: 'ai' | 'deterministic_fallback';
+  source?: 'ai' | 'deterministic_fallback' | 'uploaded';
   screenshots?: { desktop?: string; mobile?: string } | string[];
   summary: string;
   layout: string;
