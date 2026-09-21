@@ -49,6 +49,13 @@ async function startServer() {
       return res.json(image);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown image generation error.';
+      const quotaExceeded = /429|resource[_ ]?exhausted|quota|allowance\s*0/i.test(message);
+      if (quotaExceeded) {
+        return res.status(429).json({
+          code: 'IMAGE_QUOTA_EXHAUSTED',
+          error: 'Gemini image-generation quota is unavailable for this project. Uploaded product and lifestyle references remain usable as approved site assets, so you can continue building without generating new images.',
+        });
+      }
       return res.status(500).json({ error: message });
     }
   });
