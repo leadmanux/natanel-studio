@@ -3,6 +3,23 @@ import type { ProjectReferenceAsset, ReferenceAssetCategory } from '@shared/proj
 const MAX_DIMENSION = 1200;
 const JPEG_QUALITY = 0.76;
 
+const RATIOS = [
+  ['1:1', 1],
+  ['4:5', 4 / 5],
+  ['3:4', 3 / 4],
+  ['9:16', 9 / 16],
+  ['16:9', 16 / 9],
+  ['21:9', 21 / 9],
+  ['4:1', 4],
+  ['8:1', 8],
+] as const;
+
+function nearestAspectRatio(width: number, height: number): '1:1' | '4:5' | '3:4' | '9:16' | '16:9' | '21:9' | '4:1' | '8:1' {
+  const ratio = width / Math.max(1, height);
+  return [...RATIOS]
+    .sort((a, b) => Math.abs(a[1] - ratio) - Math.abs(b[1] - ratio))[0][0];
+}
+
 function readFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -55,6 +72,9 @@ export async function fileToReferenceAsset(
     mimeType,
     dataUrl,
     isPrimary,
+    width,
+    height,
+    aspectRatio: nearestAspectRatio(width, height),
     createdAt: new Date().toISOString(),
   };
 }
