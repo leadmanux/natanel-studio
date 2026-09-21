@@ -66,6 +66,31 @@ export function resolveSectionAssets(
       }
     }
 
+    // Uploaded references are real production assets. Prefer them semantically even when
+    // their source crop does not exactly match the slot ratio; the renderer can crop them.
+    if (!matchedAsset) {
+      const semantic = `${req.slot} ${req.purpose}`.toLowerCase();
+      if (/logo|emblem|brand mark/.test(semantic)) {
+        matchedAsset = eligibleAssets.find(
+          (asset) => asset.type === 'logo' || asset.referenceCategory === 'logo'
+        );
+      } else if (/product|specimen|packshot|detail/.test(semantic)) {
+        matchedAsset = eligibleAssets.find(
+          (asset) =>
+            asset.source === 'uploaded' &&
+            (asset.referenceCategory === 'product' || asset.referenceCategory === 'packaging') &&
+            !boundAssetIds.includes(asset.id)
+        );
+      } else if (/lifestyle|ugc|portrait|usage|campaign/.test(semantic)) {
+        matchedAsset = eligibleAssets.find(
+          (asset) =>
+            asset.source === 'uploaded' &&
+            asset.referenceCategory === 'lifestyle' &&
+            !boundAssetIds.includes(asset.id)
+        );
+      }
+    }
+
     // Backwards-compatible flat asset IDs.
     if (!matchedAsset && section.assetIds?.length) {
       matchedAsset = eligibleAssets.find(
