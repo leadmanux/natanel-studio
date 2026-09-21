@@ -68,6 +68,15 @@ const activeStepForTab: Record<string, number> = {
   Handoff: 5,
 };
 
+const stepInstructions = [
+  'Enter the business basics and choose English or Hebrew. Then continue.',
+  'Generate design directions, choose the one you like, and approve it.',
+  'Generate or upload the images the site needs. Approve the visuals you want to use.',
+  'Generate the pages and sections. Review the content, replace sections if needed, then approve.',
+  'Check desktop and mobile. Fix anything that looks wrong and review the QA summary.',
+  'Run validation, then download the WordPress, React, or Shopify package for this project.',
+] as const;
+
 export default function App() {
   // Check if current route is standalone preview
   const isStandalonePreview = typeof window !== 'undefined' && window.location.pathname.startsWith('/studio-preview');
@@ -340,6 +349,16 @@ export default function App() {
 
             <div className="canvas">
               <div className="canvas-main">
+                {activeTab !== 'Brief' && (
+                  <div className="step-guide-banner">
+                    <span>STEP {currentStepIndex + 1} OF 6</span>
+                    <div>
+                      <strong>{currentStep.label}</strong>
+                      <p>{stepInstructions[currentStepIndex]}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. BRIEF TAB */}
                 {activeTab === 'Brief' && (
                   <BriefEditor
