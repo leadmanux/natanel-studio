@@ -52,7 +52,12 @@ export function syncReferenceAssetsIntoProject(project: Project): Project {
   const nonReferenceAssets = (project.assets || []).filter(
     (asset) => asset.source !== 'uploaded' && !referenceIds.has(asset.id)
   );
-  const importedAssets = references.map(toGeneratedAsset);
+  const categoryPriority = { product: 0, lifestyle: 1, packaging: 2, logo: 3, inspiration: 4 } as const;
+  const orderedReferences = [...references].sort((a, b) => {
+    if (Boolean(a.isPrimary) !== Boolean(b.isPrimary)) return a.isPrimary ? -1 : 1;
+    return categoryPriority[a.category] - categoryPriority[b.category];
+  });
+  const importedAssets = orderedReferences.map(toGeneratedAsset);
   const logoUrls = references
     .filter((asset) => asset.category === 'logo')
     .map((asset) => asset.dataUrl);
