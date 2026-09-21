@@ -29,6 +29,7 @@ function toGeneratedAsset(asset: ProjectReferenceAsset): GeneratedAsset {
     referenceAssets: [],
     model: 'uploaded-reference',
     source: 'uploaded',
+    referenceCategory: asset.category,
     status: 'approved',
     outputUrl: asset.dataUrl,
     createdAt: asset.createdAt,
