@@ -289,6 +289,17 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
 
 .next-step-footer { display: flex; justify-content: flex-end; padding-top: 14px; border-top: 1px solid #222225; }
 
+
+.reference-grounding-banner { border: 1px solid #2d2d32; background: #121215; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; }
+.reference-grounding-banner > svg { flex: 0 0 auto; margin-top: 1px; }
+.reference-grounding-banner > div { display: grid; gap: 3px; }
+.reference-grounding-banner strong { font-size: 11.5px; }
+.reference-grounding-banner span { font-size: 10.5px; line-height: 1.45; color: #7b7b83; }
+.reference-grounding-banner.ready { border-color: #2e5a3a; background: #101713; }
+.reference-grounding-banner.ready > svg, .reference-grounding-banner.ready strong { color: #7bca8a; }
+.reference-grounding-banner.warning { border-color: #604a1e; background: #19150d; }
+.reference-grounding-banner.warning > svg, .reference-grounding-banner.warning strong { color: #e5b95c; }
+
 /* 3 DESIGN DIRECTIONS */
 .approved-direction-banner {
   border: 1px solid #2e5a3a;
