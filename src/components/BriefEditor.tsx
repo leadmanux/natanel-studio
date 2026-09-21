@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Project, ProjectReferenceAsset } from '@shared/project';
+import { syncReferenceAssetsIntoProject } from '@shared/referenceAssetSync';
 import {
   PROJECT_TYPE_DEFAULTS,
   directionForLanguage,
@@ -41,6 +42,14 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
   const [refUrlInput, setRefUrlInput] = useState('');
   const [referenceSites, setReferenceSites] = useState<string[]>(project.brand.referenceSites || []);
   const [referenceAssets, setReferenceAssets] = useState<ProjectReferenceAsset[]>(project.brand.referenceAssets || []);
+  const [productName, setProductName] = useState(project.facts.products[0]?.name || '');
+  const [productPrice, setProductPrice] = useState(project.facts.products[0]?.price || '');
+  const [productOriginalPrice, setProductOriginalPrice] = useState(project.facts.products[0]?.originalPrice || '');
+  const [productDescription, setProductDescription] = useState(project.facts.products[0]?.description || '');
+  const [productShippingNote, setProductShippingNote] = useState(project.facts.products[0]?.shippingNote || '');
+  const [productSpecsInput, setProductSpecsInput] = useState(
+    (project.facts.products[0]?.specs || []).map((spec) => `${spec.label}: ${spec.value}`).join('\n')
+  );
   const [colorsInput, setColorsInput] = useState(
     project.brand.colors.length > 0 ? project.brand.colors.join(', ') : ''
   );
@@ -56,6 +65,12 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
     setContentDensity(project.brand.contentDensity || defaults.contentDensity);
     setReferenceSites(project.brand.referenceSites || []);
     setReferenceAssets(project.brand.referenceAssets || []);
+    setProductName(project.facts.products[0]?.name || '');
+    setProductPrice(project.facts.products[0]?.price || '');
+    setProductOriginalPrice(project.facts.products[0]?.originalPrice || '');
+    setProductDescription(project.facts.products[0]?.description || '');
+    setProductShippingNote(project.facts.products[0]?.shippingNote || '');
+    setProductSpecsInput((project.facts.products[0]?.specs || []).map((spec) => `${spec.label}: ${spec.value}`).join('\n'));
     setColorsInput(project.brand.colors.length > 0 ? project.brand.colors.join(', ') : '');
   }, [project.id, project.projectType]);
 
@@ -64,6 +79,36 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
       .split(',')
       .map((color) => color.trim())
       .filter(Boolean);
+
+    const parsedSpecs = productSpecsInput
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const separator = line.indexOf(':');
+        if (separator < 1) return null;
+        const label = line.slice(0, separator).trim();
+        const value = line.slice(separator + 1).trim();
+        return label && value ? { label, value } : null;
+      })
+      .filter((spec): spec is { label: string; value: string } => Boolean(spec));
+
+    const existingProduct = project.facts.products[0];
+    const primaryProduct =
+      project.projectType === 'shopify' && productName.trim()
+        ? {
+            id: existingProduct?.id || 'primary-product',
+            name: productName.trim(),
+            price: productPrice.trim(),
+            originalPrice: productOriginalPrice.trim() || undefined,
+            category: existingProduct?.category || project.business.industry || undefined,
+            description: productDescription.trim() || undefined,
+            shippingNote: productShippingNote.trim() || undefined,
+            inStock: existingProduct?.inStock,
+            specs: parsedSpecs,
+            provenance: { source: 'user_input' as const, sourceLabel: 'Shopify Setup' },
+          }
+        : existingProduct;
 
     const updated: Project = {
       ...project,
@@ -87,6 +132,12 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
         referenceAssets,
         referenceSites,
       },
+      facts: {
+        ...project.facts,
+        products: primaryProduct
+          ? [primaryProduct, ...project.facts.products.slice(1)]
+          : project.facts.products,
+      },
       strategy: {
         ...project.strategy,
         primaryCTA: project.strategy.primaryCTA || defaults.primaryCTA,
@@ -98,7 +149,7 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
       },
     };
 
-    onUpdate(updated);
+    onUpdate(syncReferenceAssetsIntoProject(updated));
     setIsSaved(true);
     window.setTimeout(() => setIsSaved(false), 1800);
   };
@@ -240,6 +291,83 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
             </div>
           </div>
         </section>
+
+        {project.projectType === 'shopify' && (
+          <section className="form-card setup-card">
+            <div className="card-header-line">
+              <ShoppingBag size={16} />
+              <div>
+                <h3>Primary Product Facts</h3>
+                <span className="card-help">
+                  These are verified storefront facts. The AI may write around them, but it may not change or invent them.
+                </span>
+              </div>
+            </div>
+
+            <div className="two-col-fields">
+              <div className="field-group">
+                <label>Product Name</label>
+                <input
+                  type="text"
+                  value={productName}
+                  onChange={(event) => setProductName(event.target.value)}
+                  placeholder="e.g. KlearSkin Lift RF"
+                />
+              </div>
+              <div className="field-group">
+                <label>Current Price</label>
+                <input
+                  type="text"
+                  value={productPrice}
+                  onChange={(event) => setProductPrice(event.target.value)}
+                  placeholder="e.g. 749 ₪"
+                />
+              </div>
+            </div>
+
+            <div className="two-col-fields">
+              <div className="field-group">
+                <label>Original Price (optional)</label>
+                <input
+                  type="text"
+                  value={productOriginalPrice}
+                  onChange={(event) => setProductOriginalPrice(event.target.value)}
+                  placeholder="Only if this is a real current comparison price"
+                />
+              </div>
+              <div className="field-group">
+                <label>Shipping Note (optional)</label>
+                <input
+                  type="text"
+                  value={productShippingNote}
+                  onChange={(event) => setProductShippingNote(event.target.value)}
+                  placeholder="e.g. Free delivery in Israel"
+                />
+              </div>
+            </div>
+
+            <div className="field-group">
+              <label>Verified Product Description</label>
+              <textarea
+                rows={3}
+                value={productDescription}
+                onChange={(event) => setProductDescription(event.target.value)}
+                placeholder="Describe the product using only facts you are comfortable publishing."
+              />
+            </div>
+
+            <div className="field-group">
+              <label>Verified Product Details (optional)</label>
+              <textarea
+                rows={4}
+                value={productSpecsInput}
+                onChange={(event) => setProductSpecsInput(event.target.value)}
+                placeholder={'One per line, using Label: Value\nTechnology: RF, EMS, LED\nFeature: Cooling mode'}
+              />
+              <span className="field-help">These details can populate product accordions without the AI inventing specifications.</span>
+            </div>
+          </section>
+        )}
 
         {project.projectType === 'shopify' && (
           <ShopifyReferenceAssets assets={referenceAssets} onChange={setReferenceAssets} />
