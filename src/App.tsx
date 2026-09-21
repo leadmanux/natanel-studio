@@ -18,7 +18,12 @@ import {
   Sliders,
 } from 'lucide-react';
 import { demoComponents } from '@shared/componentRegistry';
-import { createEmptyProject, type Project, type ProjectType } from '@shared/project';
+import type { Project, ProjectType } from '@shared/project';
+import {
+  applyProjectTypeDefaults,
+  createProjectWithDefaults,
+  PROJECT_TYPE_DEFAULTS,
+} from '@shared/projectDefaults';
 import { createShopifyReferenceProject } from '@shared/referenceShopifyProject';
 import { projectRepository } from './data/projectRepository';
 import { BriefEditor } from './components/BriefEditor';
@@ -32,15 +37,36 @@ import { SitePreviewView } from './components/SitePreviewView';
 import { StandalonePreviewView } from './components/StandalonePreviewView';
 import { ExportWorkspace } from './components/ExportWorkspace';
 
-const navItems = [
+const primaryNavItems = [
   { label: 'Projects', icon: FolderKanban },
-  { label: 'Component Sandbox', icon: MonitorSmartphone },
-  { label: 'Component Library', icon: Blocks },
-  { label: 'Asset Library', icon: ImageIcon },
   { label: 'Settings', icon: Settings },
 ];
 
-const workspaceTabs = ['Brief', 'Strategy', 'Design', 'Assets', 'Build', 'Preview', 'Review', 'Handoff'];
+const advancedNavItems = [
+  { label: 'Component Library', icon: Blocks },
+  { label: 'Component Sandbox', icon: MonitorSmartphone },
+  { label: 'Asset Library', icon: ImageIcon },
+];
+
+const guidedSteps = [
+  { tab: 'Brief', label: 'Setup', help: 'Business, goal & language' },
+  { tab: 'Design', label: 'Design', help: 'Choose the visual direction' },
+  { tab: 'Assets', label: 'Images', help: 'Generate or upload visuals' },
+  { tab: 'Build', label: 'Build', help: 'Pages, sections & content' },
+  { tab: 'Preview', label: 'Preview & QA', help: 'Check desktop and mobile' },
+  { tab: 'Handoff', label: 'Export', help: 'Download the finished site' },
+] as const;
+
+const activeStepForTab: Record<string, number> = {
+  Brief: 0,
+  Strategy: 0,
+  Design: 1,
+  Assets: 2,
+  Build: 3,
+  Preview: 4,
+  Review: 4,
+  Handoff: 5,
+};
 
 export default function App() {
   // Check if current route is standalone preview
@@ -54,9 +80,9 @@ export default function App() {
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
 
   // Initialize or load project
-  const [project, setProject] = useState<Project>(() => {
-    return createEmptyProject('demo-project', 'business_website', 'Atelier Kanso Architecture');
-  });
+  const [project, setProject] = useState<Project>(() =>
+    createProjectWithDefaults('demo-project', 'business_website', 'New Business Website', 'English')
+  );
 
   // Load latest project from repository on mount
   useEffect(() => {
@@ -88,12 +114,10 @@ export default function App() {
   };
 
   const setProjectType = (type: ProjectType) => {
-    const updated: Project = {
-      ...project,
-      projectType: type,
-      updatedAt: new Date().toISOString(),
-    };
+    if (type === project.projectType) return;
+    const updated = applyProjectTypeDefaults(project, type);
     handleUpdateProject(updated);
+    setActiveTab('Brief');
   };
 
   const handleLoadShopifyReferenceStore = () => {
@@ -103,28 +127,27 @@ export default function App() {
     setActiveTab('Preview');
   };
 
-  // Determine pipeline steps completion
-  const pipelineSteps = useMemo(() => {
+  const progressSteps = useMemo(() => {
     const hasBrief = Boolean(project.business.businessName && project.business.description);
-    const hasReferences = Boolean(project.brand.referenceAnalyses && project.brand.referenceAnalyses.length > 0);
-    const hasArtDirection = Boolean(project.designSystem.artDirection);
-    const hasComponentPlan = Boolean(project.pages.length > 0 && project.pages.some((p) => p.sections.length > 0));
-    const hasAssetPlan = Boolean(project.assets && project.assets.length > 0);
-    const hasCritic = project.status === 'review' || hasComponentPlan;
-    const hasHandoff = project.status === 'exported' || project.status === 'approved';
+    const hasDesign = Boolean(project.designSystem.artDirection);
+    const hasAssets = Boolean(project.assets.length);
+    const hasBuild = Boolean(project.pages.some((page) => page.sections.length > 0));
+    const hasPreview = hasBuild;
+    const hasExport = project.exportConfig.status === 'complete' || project.status === 'exported';
 
     return [
-      { name: 'Strategic Brief', completed: hasBrief },
-      { name: 'Reference Analysis', completed: hasReferences },
-      { name: 'Art Direction', completed: hasArtDirection },
-      { name: '3 Design Directions', completed: hasArtDirection },
-      { name: 'Direction Approval', completed: hasArtDirection },
-      { name: 'Component Selection', completed: hasComponentPlan },
-      { name: 'Asset Manifest Plan', completed: hasAssetPlan },
-      { name: 'Design Critic Inspection', completed: hasCritic },
-      { name: 'Handoff Export', completed: hasHandoff },
+      { name: 'Setup', completed: hasBrief },
+      { name: 'Design', completed: hasDesign },
+      { name: 'Images', completed: hasAssets },
+      { name: 'Build', completed: hasBuild },
+      { name: 'Preview & QA', completed: hasPreview },
+      { name: 'Export', completed: hasExport },
     ];
   }, [project]);
+
+  const currentStepIndex = activeStepForTab[activeTab] ?? 0;
+  const currentStep = guidedSteps[currentStepIndex];
+  const projectDefaults = PROJECT_TYPE_DEFAULTS[project.projectType];
 
   return (
     <div className="app-shell">
