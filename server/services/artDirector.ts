@@ -41,7 +41,7 @@ export class GeminiArtDirector implements ArtDirectorService {
 Analyze this project:
 - Business: ${project.business.businessName || 'Bespoke Brand'}
 - Industry: ${project.business.industry || 'Modern Business'}
-- Description: ${project.business.description || 'High-end service provider'}
+- Private project brief (context only, never storefront copy): ${project.business.description || 'No private brief supplied'}
 - Target Audience: ${project.business.targetAudience || 'Discerning clientele'}
 - Primary Conversion Goal: ${project.business.primaryGoal || 'High-intent client inquiries'}
 - Language & Direction: ${project.business.language} (${project.business.direction.toUpperCase()})
