@@ -167,6 +167,7 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
 .card-header-line > div { min-width: 0; }
 .card-help { display: block; margin-top: 3px; color: #67676f; font-size: 11px; line-height: 1.4; }
 
+.language-select-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, auto); gap: 12px; align-items: end; }
 .language-choice-row { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
 .language-choice { border: 1px solid #29292e; background: #0e0e10; padding: 15px; display: grid; grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 3px; cursor: pointer; }
 .language-choice input { grid-row: 1 / span 2; margin-top: 3px; accent-color: #f1f1ee; }
@@ -744,7 +745,7 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
   .workflow-context-bar { align-items: flex-start; flex-direction: column; }
   .setup-summary { grid-template-columns: auto 1fr; }
   .setup-summary-meta { grid-column: 1 / -1; justify-content: flex-start; }
-  .language-choice-row, .project-type-grid { grid-template-columns: 1fr; }
+  .language-select-row, .language-choice-row, .project-type-grid { grid-template-columns: 1fr; }
   .guided-bottom-bar { align-items: stretch; flex-direction: column; }
   .sidebar { display: none; }
   .main-area { padding: 22px 14px 40px; }
