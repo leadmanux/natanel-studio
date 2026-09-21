@@ -363,6 +363,11 @@ export function BuildWorkspace({
 
   const eligibleAssets = project.assets.filter((asset) => (asset.status === 'approved' || asset.status === 'generated') && asset.outputUrl);
   const canApprove = Boolean(currentSection && sectionReady(currentSection));
+  const eligibleComponentIds = new Set(eligibleComponents.map((component) => component.id));
+  const incompatibleSectionCount = project.pages.reduce(
+    (total, page) => total + page.sections.filter((section) => !eligibleComponentIds.has(section.componentRegistryId)).length,
+    0
+  );
   const readyUnapprovedCount = project.pages.reduce(
     (total, page) => total + page.sections.filter((section) => sectionReady(section) && !section.contentApproved).length,
     0
@@ -385,6 +390,11 @@ export function BuildWorkspace({
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {registryOffline && <span style={{ color: '#f59e0b', fontSize: 10 }}>OFFLINE REGISTRY CACHE</span>}
+          {project.projectType === 'shopify' && incompatibleSectionCount > 0 && (
+            <button onClick={handlePlan} disabled={isPlanning} style={{ border: '1px solid #8a5a16', background: '#2a1b08', color: '#f7c56a', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>
+              REPAIR SHOPIFY PLAN ({incompatibleSectionCount})
+            </button>
+          )}
           <button onClick={() => setShowFacts(true)} style={{ border: '1px solid #303038', background: '#18181d', color: '#d4d4d8', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center', fontSize: 11 }}><Database size={13} /> Verified Facts</button>
           <button onClick={handleCompose} disabled={isComposing || isPlanning} style={{ border: 'none', background: '#2563eb', color: '#fff', padding: '8px 13px', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>{isComposing ? 'Composing…' : project.pages.length ? 'COMPOSE WEBSITE' : 'PLAN SITE'}</button>
           {readyUnapprovedCount > 0 && <button onClick={handleApproveAllReady} style={{ border: '1px solid #2f5a3c', background: '#14251a', color: '#6ee7a0', padding: '7px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>APPROVE READY ({readyUnapprovedCount})</button>}
