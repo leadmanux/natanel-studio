@@ -8,7 +8,7 @@ interface ShopifyReferenceAssetsProps {
   onChange: (assets: ProjectReferenceAsset[]) => void;
 }
 
-const MAX_REFERENCE_ASSETS = 12;
+const MAX_REFERENCE_ASSETS = 8;
 
 const categoryMeta: Record<ReferenceAssetCategory, { label: string; help: string }> = {
   product: {
