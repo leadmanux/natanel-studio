@@ -492,7 +492,15 @@ export function BuildWorkspace({
             {!!currentContract?.assetSlots.length && <div style={{ borderTop: '1px solid #25252a', paddingTop: 12, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}><span style={{ fontSize: 10, fontWeight: 700, color: '#85858e' }}>ASSET SLOTS</span>{onProceedToAssets && <button onClick={onProceedToAssets} style={{ border: 0, background: 'transparent', color: '#60a5fa', cursor: 'pointer', fontSize: 9 }}>Open Assets →</button>}</div>
               {currentContract.assetSlots.map((slot) => {
-                const options = eligibleAssets.filter((asset) => asset.aspectRatio === slot.aspectRatio);
+                const semantic = `${slot.slot} ${slot.purpose}`.toLowerCase();
+                const options = eligibleAssets.filter((asset) => {
+                  if (asset.aspectRatio === slot.aspectRatio) return true;
+                  if (asset.source !== 'uploaded') return false;
+                  if (/logo|emblem|brand mark/.test(semantic)) return asset.referenceCategory === 'logo' || asset.type === 'logo';
+                  if (/product|specimen|packshot|detail/.test(semantic)) return asset.referenceCategory === 'product' || asset.referenceCategory === 'packaging';
+                  if (/lifestyle|ugc|portrait|usage|campaign/.test(semantic)) return asset.referenceCategory === 'lifestyle';
+                  return false;
+                });
                 return <div key={slot.slot} style={{ marginBottom: 8 }}>
                   <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#7d7d86', marginBottom: 3 }}><span>{slot.slot}{slot.required ? ' *' : ''}</span><span>{slot.aspectRatio}</span></label>
                   <select value={currentSection.assetBindings?.[slot.slot] || ''} onChange={(event) => handleAssetBinding(slot.slot, event.target.value)} style={{ width: '100%', background: '#151519', color: '#e4e4e7', border: '1px solid #292930', borderRadius: 4, padding: 6, fontSize: 10 }}>
