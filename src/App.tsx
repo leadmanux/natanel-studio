@@ -290,7 +290,7 @@ export default function App() {
                   )}
                 </div>
                 <div className="muted">
-                  Platform-neutral until handoff • {project.business.industry || 'Architecture & Design'}
+                  {projectDefaults.label} · {project.business.industry || 'Industry not set'} · {project.business.language || 'English'}
                 </div>
               </div>
 
@@ -310,16 +310,32 @@ export default function App() {
               </div>
             </div>
 
-            <div className="tabs">
-              {workspaceTabs.map((tab) => (
-                <button
-                  key={tab}
-                  className={activeTab === tab ? 'active' : ''}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab}
-                </button>
-              ))}
+            <div className="guided-workflow">
+              {guidedSteps.map((step, index) => {
+                const isActive = currentStepIndex === index;
+                const isComplete = progressSteps[index]?.completed;
+                return (
+                  <button
+                    key={step.tab}
+                    type="button"
+                    className={`guided-step-button ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
+                    onClick={() => setActiveTab(step.tab)}
+                  >
+                    <span className="guided-step-number">{isComplete ? '✓' : index + 1}</span>
+                    <span className="guided-step-copy">
+                      <strong>{step.label}</strong>
+                      <small>{step.help}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="workflow-context-bar">
+              <span><strong>Current:</strong> Step {currentStepIndex + 1} of 6 · {currentStep.label}</span>
+              <div>
+                <button type="button" onClick={() => setActiveTab('Strategy')}>View strategy</button>
+                <button type="button" onClick={() => setActiveTab('Review')}>View QA summary</button>
+              </div>
             </div>
 
             <div className="canvas">
@@ -471,40 +487,42 @@ export default function App() {
               </div>
 
               {/* RIGHT INSPECTOR */}
-              <aside className="inspector">
-                <div className="inspector-title">Architecture Pipeline</div>
+              <aside className="inspector guided-inspector">
+                <div className="inspector-title">Your Progress</div>
                 <ol className="pipeline">
-                  {pipelineSteps.map((step, index) => (
-                    <li key={step.name} className={step.completed ? 'completed' : ''}>
+                  {progressSteps.map((step, index) => (
+                    <li
+                      key={step.name}
+                      className={`${step.completed ? 'completed' : ''} ${currentStepIndex === index ? 'current' : ''}`}
+                    >
                       <span>{step.completed ? '✓' : String(index + 1).padStart(2, '0')}</span>
                       <span>{step.name}</span>
                     </li>
                   ))}
                 </ol>
 
-                <div style={{ marginTop: '28px', borderTop: '1px solid #1f1f23', paddingTop: '18px' }}>
-                  <div className="inspector-title">Design System Tokens</div>
-                  <div style={{ display: 'grid', gap: '8px', fontSize: '11.5px', color: '#888890' }}>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Direction</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.designSystem.artDirection || 'Not yet locked'}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Density</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.brand.contentDensity}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Orientation</span>
-                      <strong style={{ color: '#e0e0dc' }}>{project.business.direction.toUpperCase()}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#5b5b63', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Components</span>
-                      <strong style={{ color: '#e0e0dc' }}>
-                        {demoComponents.filter((c) => c.status === 'approved').length} approved in registry
-                      </strong>
-                    </div>
-                  </div>
+                <div className="what-next-card">
+                  <div className="what-next-label">WHAT TO DO NOW</div>
+                  <strong>{currentStep.label}</strong>
+                  <p>{currentStep.help}.</p>
                 </div>
+
+                <div className="project-defaults-card">
+                  <div className="inspector-title">Automatic Defaults</div>
+                  <div><span>Project</span><strong>{projectDefaults.label}</strong></div>
+                  <div><span>Mode</span><strong>{projectDefaults.ecommerceMode === 'ecommerce' ? 'Ecommerce' : 'Lead generation'}</strong></div>
+                  <div><span>Language</span><strong>{project.business.language || 'English'}</strong></div>
+                  <div><span>Direction</span><strong>{project.business.direction.toUpperCase()}</strong></div>
+                  <div><span>Export</span><strong>{projectDefaults.exportTarget === 'shopify' ? 'Shopify Theme' : 'WordPress'}</strong></div>
+                </div>
+
+                <details className="inspector-technical">
+                  <summary>Technical details</summary>
+                  <div>
+                    <span>{demoComponents.filter((component) => component.status === 'approved').length} approved components</span>
+                    <span>{project.designSystem.artDirection || 'Art direction not selected yet'}</span>
+                  </div>
+                </details>
               </aside>
             </div>
           </section>
