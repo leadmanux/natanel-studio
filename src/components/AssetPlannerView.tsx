@@ -53,11 +53,17 @@ export function AssetPlannerView({ project, onUpdateProject }: AssetPlannerViewP
       const inProgressAssets = assets.map((a) => (a.id === asset.id ? { ...a, status: 'generating' as const } : a));
       onUpdateProject({ ...project, assets: inProgressAssets });
 
+      const referenceImageUrls = (asset.referenceAssets || [])
+        .map((referenceId) => project.brand.referenceAssets?.find((reference) => reference.id === referenceId)?.dataUrl)
+        .filter((value): value is string => Boolean(value))
+        .slice(0, 6);
+
       const response = await requestImageGeneration({
         prompt: asset.prompt,
         negativePrompt: asset.negativePrompt,
         aspectRatio: asset.aspectRatio,
         resolution: asset.resolution,
+        referenceImageUrls,
       });
 
       const outputUrl = `data:${response.mimeType};base64,${response.base64Data}`;
@@ -89,9 +95,9 @@ export function AssetPlannerView({ project, onUpdateProject }: AssetPlannerViewP
           <span className="eyebrow">STAGE 03 / PRODUCTION ASSETS</span>
           <h2>Website Asset Manifest & Visual Consistency</h2>
           <p className="section-description">
-            Before executing generation, a complete asset manifest maps every panoramic banner, case-study elevation,
-            and executive portrait. Visual consistency instructions lock lighting, focal length, and material reality
-            across the suite via <code className="code-pill">gemini-3.1-flash-image</code>.
+            Plan and generate the imagery the website still needs. For Shopify projects, uploaded product and lifestyle
+            references from Setup are automatically carried into planning and image generation so the real product stays
+            visually consistent.
           </p>
         </div>
         <button className="primary-button" disabled={isPlanning} onClick={handlePlanAssets}>

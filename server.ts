@@ -33,7 +33,7 @@ async function startServer() {
     negativePrompt: z.string().optional(),
     aspectRatio: z.enum(['1:1', '4:5', '3:4', '9:16', '16:9', '21:9', '4:1', '8:1']),
     resolution: z.enum(['0.5K', '1K', '2K', '4K']).default('1K'),
-    referenceImageUrls: z.array(z.string().url()).optional(),
+    referenceImageUrls: z.array(z.string().min(1)).max(6).optional(),
   });
 
   app.post('/api/assets/generate', async (req, res) => {

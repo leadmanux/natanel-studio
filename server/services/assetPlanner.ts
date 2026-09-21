@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { GeneratedAsset, Project } from '../../shared/project';
 import type { AssetPlannerService } from '../../src/ai/contracts';
 import { modelConfig } from '../config/models';
+import { referenceAssetIds, referenceAssetPromptContext, referenceImageParts } from './referenceAssetContext';
 import { getFallbackAssets } from '../../shared/industryTaxonomy';
 
 export class GeminiAssetPlanner implements AssetPlannerService {
@@ -45,6 +46,17 @@ Create a complete, cohesive website asset manifest for this project:
 - Color Palette: ${project.designSystem.colors.join(', ')}
 - Required Pages: ${project.strategy.requiredPages.join(', ') || 'Home'}
 
+Uploaded visual references, in the same order as attached images:
+${referenceAssetPromptContext(project)}
+
+REFERENCE-BOUND GENERATION RULES:
+- Inspect uploaded references directly when present.
+- Product-focused generated assets must preserve the visible identity of the real product: proportions, silhouette, colors, controls, head shape, packaging and finish.
+- Lifestyle references define believable context, audience and photographic tone; do not copy a person's identity.
+- Do not introduce visible product features that are absent from the supplied product references.
+- Do not infer product efficacy, medical claims, specifications or certifications from imagery.
+- Write prompts that explicitly tell the image model which visible reference details must remain unchanged.
+
 CRITICAL RULES:
 1. Create a complete, production-ready manifest covering all primary visual slots:
    - Hero: e.g. hero-main (21:9 or 16:9, 4K)
@@ -60,7 +72,7 @@ Return structured JSON array of assets.`;
 
     const response = await this.ai.models.generateContent({
       model: modelConfig.reasoningModel || 'gemini-3.8-flash',
-      contents: prompt,
+      contents: [prompt, ...referenceImageParts(project, 8)],
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -105,7 +117,7 @@ Return structured JSON array of assets.`;
       negativePrompt: item.negativePrompt || 'cartoon, render, oversaturated, blurry, 3d, artificial plastic sheen, deformed hands, stock photo smile',
       aspectRatio: normalizeAspectRatio(item.aspectRatio),
       resolution: normalizeResolution(item.resolution),
-      referenceAssets: [],
+      referenceAssets: referenceAssetIds(project, 6),
       model: 'gemini-3.1-flash-image',
       status: 'planned' as const,
       source: 'ai' as const,

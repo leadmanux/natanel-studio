@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import type { Project } from '@shared/project';
+import type { Project, ProjectReferenceAsset } from '@shared/project';
 import {
   PROJECT_TYPE_DEFAULTS,
   directionForLanguage,
   normalizeStudioLanguage,
   type SupportedStudioLanguage,
 } from '@shared/projectDefaults';
+import { ShopifyReferenceAssets } from './ShopifyReferenceAssets';
 import {
   ArrowRight,
   Building,
@@ -39,6 +40,7 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
   );
   const [refUrlInput, setRefUrlInput] = useState('');
   const [referenceSites, setReferenceSites] = useState<string[]>(project.brand.referenceSites || []);
+  const [referenceAssets, setReferenceAssets] = useState<ProjectReferenceAsset[]>(project.brand.referenceAssets || []);
   const [colorsInput, setColorsInput] = useState(
     project.brand.colors.length > 0 ? project.brand.colors.join(', ') : ''
   );
@@ -53,6 +55,7 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
     setLanguage(normalizeStudioLanguage(project.business.language));
     setContentDensity(project.brand.contentDensity || defaults.contentDensity);
     setReferenceSites(project.brand.referenceSites || []);
+    setReferenceAssets(project.brand.referenceAssets || []);
     setColorsInput(project.brand.colors.length > 0 ? project.brand.colors.join(', ') : '');
   }, [project.id, project.projectType]);
 
@@ -81,6 +84,7 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
         ecommerceMode: defaults.ecommerceMode,
         contentDensity,
         colors: parsedColors,
+        referenceAssets,
         referenceSites,
       },
       strategy: {
@@ -236,6 +240,10 @@ export function BriefEditor({ project, onUpdate, onProceedToDesign }: BriefEdito
             </div>
           </div>
         </section>
+
+        {project.projectType === 'shopify' && (
+          <ShopifyReferenceAssets assets={referenceAssets} onChange={setReferenceAssets} />
+        )}
 
         <details className="advanced-settings">
           <summary>

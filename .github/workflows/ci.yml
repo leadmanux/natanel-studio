@@ -32,5 +32,7 @@ jobs:
         run: npm run validate:reference-store
       - name: Validate Guided UX Defaults
         run: npm run validate:ux
+      - name: Validate Shopify Reference Assets
+        run: npm run validate:reference-assets
       - name: Build
         run: npm run build

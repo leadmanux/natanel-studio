@@ -550,6 +550,24 @@ export function DesignWorkspace({ project, onUpdateProject, onNavigateToAssets }
             </button>
           </div>
 
+          {project.projectType === 'shopify' && (
+            <div className={`reference-grounding-banner ${project.brand.referenceAssets?.length ? 'ready' : 'warning'}`}>
+              <ImageIcon size={17} />
+              <div>
+                <strong>
+                  {project.brand.referenceAssets?.length
+                    ? `${project.brand.referenceAssets.length} product / brand references connected`
+                    : 'No product references connected yet'}
+                </strong>
+                <span>
+                  {project.brand.referenceAssets?.length
+                    ? 'Design Brain is inspecting these uploaded images when it creates visual directions and commerce layouts.'
+                    : 'For a Shopify store, go back to Setup and upload real product and lifestyle images before generating directions.'}
+                </span>
+              </div>
+            </div>
+          )}
+
           {currentApproved && (
             <div className="approved-direction-banner">
               <div className="approved-left">

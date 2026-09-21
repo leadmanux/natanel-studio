@@ -221,6 +221,35 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
 .inspector-technical summary { cursor: pointer; }
 .inspector-technical > div { display: grid; gap: 5px; margin-top: 8px; }
 
+
+/* SHOPIFY PRODUCT & BRAND REFERENCES */
+.reference-assets-card { gap: 18px; }
+.reference-why-box { border: 1px solid #3a321f; background: #18150f; padding: 12px 14px; display: grid; gap: 4px; }
+.reference-why-box strong { color: #e4c06d; font-size: 11.5px; }
+.reference-why-box span { color: #9f9479; font-size: 11px; line-height: 1.45; }
+.reference-upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.reference-upload-zone { border: 1px dashed #303036; background: #0f0f11; padding: 14px; display: grid; grid-template-columns: auto minmax(0,1fr); gap: 9px 10px; align-items: start; }
+.reference-upload-zone > svg { color: #8d8d94; margin-top: 2px; }
+.reference-upload-zone > div { min-width: 0; display: grid; gap: 3px; }
+.reference-upload-zone strong { font-size: 12px; color: #e7e7e4; }
+.reference-upload-zone span { font-size: 10.5px; color: #74747c; line-height: 1.4; }
+.reference-upload-zone .secondary-button { grid-column: 1 / -1; justify-self: start; }
+.reference-asset-gallery { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.reference-asset-item { border: 1px solid #27272c; background: #0e0e10; min-width: 0; }
+.reference-asset-image { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: #09090a; }
+.reference-asset-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.reference-asset-image > span { position: absolute; left: 7px; bottom: 7px; background: rgba(7,7,8,.82); border: 1px solid rgba(255,255,255,.13); padding: 3px 6px; color: #d6d6d2; font-size: 9px; }
+.primary-reference-badge { position: absolute; top: 7px; right: 7px; display: inline-flex; align-items: center; gap: 4px; background: rgba(26,22,13,.9); border: 1px solid #6e5722; color: #e5b95c; padding: 4px 6px; font-size: 9px; }
+.reference-asset-controls { padding: 10px; display: grid; gap: 8px; }
+.reference-asset-name { color: #bcbcc1; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reference-asset-controls input { width: 100%; background: #0a0a0b; border: 1px solid #28282d; color: #e9e9e5; padding: 8px 9px; font: inherit; font-size: 10.5px; outline: none; }
+.reference-asset-controls input:focus { border-color: #505057; }
+.reference-asset-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.reference-asset-actions button { border: 0; background: transparent; color: #85858d; padding: 0; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 10px; }
+.reference-asset-actions button:hover { color: #d7d7d3; }
+.reference-asset-actions .danger-link:hover { color: #e77b7b; }
+.reference-asset-footer { border-top: 1px solid #222226; padding-top: 10px; display: flex; justify-content: space-between; gap: 12px; color: #66666d; font-size: 10px; }
+
 /* DESIGN WORKSPACE */
 .design-workspace { display: flex; flex-direction: column; gap: 24px; }
 .design-subnav { display: flex; gap: 8px; border-bottom: 1px solid #232326; padding-bottom: 12px; overflow-x: auto; }
@@ -259,6 +288,17 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
 .principles-box ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; color: #a9a9b0; font-size: 12.5px; line-height: 1.45; }
 
 .next-step-footer { display: flex; justify-content: flex-end; padding-top: 14px; border-top: 1px solid #222225; }
+
+
+.reference-grounding-banner { border: 1px solid #2d2d32; background: #121215; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; }
+.reference-grounding-banner > svg { flex: 0 0 auto; margin-top: 1px; }
+.reference-grounding-banner > div { display: grid; gap: 3px; }
+.reference-grounding-banner strong { font-size: 11.5px; }
+.reference-grounding-banner span { font-size: 10.5px; line-height: 1.45; color: #7b7b83; }
+.reference-grounding-banner.ready { border-color: #2e5a3a; background: #101713; }
+.reference-grounding-banner.ready > svg, .reference-grounding-banner.ready strong { color: #7bca8a; }
+.reference-grounding-banner.warning { border-color: #604a1e; background: #19150d; }
+.reference-grounding-banner.warning > svg, .reference-grounding-banner.warning strong { color: #e5b95c; }
 
 /* 3 DESIGN DIRECTIONS */
 .approved-direction-banner {
@@ -752,7 +792,7 @@ h2 { margin: 8px 0 0; font-size: clamp(24px, 2.5vw, 36px); letter-spacing: -.035
   .workflow-context-bar { align-items: flex-start; flex-direction: column; }
   .setup-summary { grid-template-columns: auto 1fr; }
   .setup-summary-meta { grid-column: 1 / -1; justify-content: flex-start; }
-  .language-select-row, .language-choice-row, .project-type-grid { grid-template-columns: 1fr; }
+  .language-select-row, .language-choice-row, .project-type-grid, .reference-upload-grid, .reference-asset-gallery { grid-template-columns: 1fr; }
   .guided-bottom-bar { align-items: stretch; flex-direction: column; }
   .sidebar { display: none; }
   .main-area { padding: 22px 14px 40px; }

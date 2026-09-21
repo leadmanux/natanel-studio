@@ -17,6 +17,19 @@ export interface SocialLink {
   url: string;
 }
 
+export type ReferenceAssetCategory = 'product' | 'lifestyle' | 'packaging' | 'logo' | 'inspiration';
+
+export interface ProjectReferenceAsset {
+  id: string;
+  category: ReferenceAssetCategory;
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+  notes?: string;
+  isPrimary?: boolean;
+  createdAt: string;
+}
+
 export interface BusinessProfile {
   businessName: string;
   industry: string;
@@ -184,6 +197,7 @@ export interface BrandProfile {
   existingFonts: string[];
   brandNotes: string;
   uploadedAssets: string[];
+  referenceAssets?: ProjectReferenceAsset[];
   referenceSites: string[];
   referenceAnalyses?: ReferenceAnalysis[];
   visualPreferences?: string[];
@@ -326,6 +340,7 @@ export const createEmptyProject = (id: string, type: ProjectType, name = 'Untitl
       existingFonts: [],
       brandNotes: '',
       uploadedAssets: [],
+      referenceAssets: [],
       referenceSites: [],
     },
     facts: {
