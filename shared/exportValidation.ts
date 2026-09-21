@@ -352,7 +352,7 @@ function validateWarnings(
     }
 
     for (const page of project.pages) {
-      const looksLikeProductTemplate = /product/i.test(`${page.name} ${page.slug} ${page.purpose}`);
+      const looksLikeProductTemplate = `${page.name} ${page.slug} ${page.purpose}`.toLowerCase().includes('product');
       for (const section of page.sections || []) {
         if (section.componentRegistryId === 'hero-product-commerce-01' && !looksLikeProductTemplate) {
           issues.push({
