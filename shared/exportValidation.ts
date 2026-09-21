@@ -6,6 +6,7 @@ import { isStudioMotionPreset } from './studioMotion';
 import { normalizeManualSlug } from './pageSlug';
 import { resolveSectionAssets } from './assetBinding';
 import { evaluateComponentEligibility } from './componentEligibility';
+import { getPublicProjectDescription } from './publicProjectContent';
 import type { ExportValidation, ExportValidationIssue, ExportTarget } from './exportTypes';
 
 /**
@@ -312,10 +313,11 @@ function validateWarnings(
     });
   }
 
-  if (!project.business.description?.trim() || project.business.description.trim().length < 20) {
+  const publicDescription = getPublicProjectDescription(project);
+  if (!publicDescription || publicDescription.length < 20) {
     issues.push({
       code: 'short_seo_description',
-      message: 'Business description is short or missing; search snippets may be weak.',
+      message: 'Public-facing brand/product description is short or missing; search snippets may be weak.',
       severity: 'warning',
     });
   }
