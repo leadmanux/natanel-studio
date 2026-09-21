@@ -161,7 +161,7 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map(({ label, icon: Icon }) => (
+          {primaryNavItems.map(({ label, icon: Icon }) => (
             <button
               key={label}
               className={`nav-button ${activeNav === label ? 'active' : ''}`}
@@ -171,6 +171,22 @@ export default function App() {
               <span>{label}</span>
             </button>
           ))}
+
+          <details className="sidebar-advanced">
+            <summary>Advanced tools</summary>
+            <div className="sidebar-advanced-items">
+              {advancedNavItems.map(({ label, icon: Icon }) => (
+                <button
+                  key={label}
+                  className={`nav-button ${activeNav === label ? 'active' : ''}`}
+                  onClick={() => setActiveNav(label)}
+                >
+                  <Icon size={17} strokeWidth={1.6} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </details>
         </nav>
 
         <div className="sidebar-footer">
@@ -182,8 +198,8 @@ export default function App() {
       <main className="main-area">
         <header className="topbar">
           <div>
-            <div className="eyebrow">DESIGN BRAIN V1</div>
-            <h1>Build sites with taste, not templates.</h1>
+            <div className="eyebrow">NATANEL STUDIO</div>
+            <h1>Build a complete website in six clear steps.</h1>
           </div>
           <button className="primary-button" onClick={() => setIsNewProjectModalOpen(true)}>
             <Plus size={17} /> New project
@@ -211,13 +227,13 @@ export default function App() {
           </section>
         ) : activeNav === 'Settings' ? (
           <section className="workspace-card">
-            <div className="canvas-main" style={{ padding: '36px', maxWidth: '820px' }}>
+            <div className="canvas-main" style={{ padding: '36px', maxWidth: '860px' }}>
               <div className="section-intro">
                 <div>
-                  <span className="eyebrow">ENVIRONMENT & ENGINE</span>
-                  <h2>Studio Architecture Settings</h2>
+                  <span className="eyebrow">SETTINGS</span>
+                  <h2>Studio Settings</h2>
                   <p className="section-description">
-                    Server-side AI orchestration running on Gemini with native image synthesis and multi-platform handoff.
+                    Most users never need to touch these. The six-step project workflow already applies the correct defaults.
                   </p>
                 </div>
               </div>
@@ -225,43 +241,37 @@ export default function App() {
               <div className="form-card">
                 <div className="card-header-line">
                   <Sparkles size={16} />
-                  <h3>AI Engine Configuration</h3>
+                  <div>
+                    <h3>AI & Runtime</h3>
+                    <span className="card-help">Technical configuration for the Studio engine.</span>
+                  </div>
                 </div>
                 <div className="detail-item">
-                  <span className="detail-label">Default Image Synthesis Model</span>
-                  <p><code className="code-pill">gemini-3.1-flash-image</code> (Nano Banana 2, Server-side proxy)</p>
+                  <span className="detail-label">Image Model</span>
+                  <p><code className="code-pill">gemini-3.1-flash-image</code></p>
                 </div>
                 <div className="detail-item">
-                  <span className="detail-label">Reasoning & Art Director Engine</span>
-                  <p><code className="code-pill">gemini-2.5-flash</code> with heuristic fallback guarantee</p>
+                  <span className="detail-label">Design / Reasoning Model</span>
+                  <p><code className="code-pill">gemini-2.5-flash</code></p>
                 </div>
                 <div className="detail-item">
-                  <span className="detail-label">Persistence Mode</span>
-                  <p>Local Repository (Browser-safe storage with Firestore abstraction layer)</p>
+                  <span className="detail-label">Storage</span>
+                  <p>Local browser repository with optional Firebase persistence.</p>
                 </div>
-                <div className="detail-item">
-                  <span className="detail-label">RTL Support</span>
-                  <p>First-class Hebrew & Arabic directional layout with typography and component mirroring</p>
-                </div>
-
+              </div>
 
               <div className="form-card" style={{ marginTop: 18 }}>
                 <div className="card-header-line">
                   <ShieldCheck size={16} />
-                  <h3>QA Reference Store</h3>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">End-to-end Shopify test fixture</span>
-                  <p>
-                    Loads a clearly labelled Hebrew RTL reference store with approved sections and local deterministic
-                    assets. Use it to inspect Preview, Builder, Handoff validation and the Shopify ZIP without touching a
-                    client project.
-                  </p>
+                  <div>
+                    <h3>QA Reference Store</h3>
+                    <span className="card-help">Internal test project for validating the Shopify workflow.</span>
+                  </div>
                 </div>
                 <button className="secondary-button" onClick={handleLoadShopifyReferenceStore}>
                   <ShoppingBag size={15} /> Load RTL Shopify Reference Store
                 </button>
-              </div>              </div>
+              </div>
             </div>
           </section>
         ) : (
