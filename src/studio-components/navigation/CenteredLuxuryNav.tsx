@@ -81,25 +81,39 @@ export function CenteredLuxuryNav(props: StudioComponentProps<CenteredNavContent
             ))}
           </nav>
 
-          {/* Centered Monogram & Brand Title */}
+          {/* Centered Logo/Monogram & Brand Title */}
           <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                border: '1px solid var(--studio-accent)',
-                color: 'var(--studio-accent)',
-                fontFamily: 'var(--studio-font-display)',
-                fontSize: '14px',
-                fontWeight: 700,
-              }}
-            >
-              {monogram}
-            </span>
+            {props.assets?.logo?.url ? (
+              <img
+                src={props.assets.logo.url}
+                alt={brand}
+                style={{
+                  display: 'block',
+                  maxWidth: '132px',
+                  width: 'auto',
+                  height: '34px',
+                  objectFit: 'contain',
+                }}
+              />
+            ) : (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  border: '1px solid var(--studio-accent)',
+                  color: 'var(--studio-accent)',
+                  fontFamily: 'var(--studio-font-display)',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                }}
+              >
+                {monogram}
+              </span>
+            )}
             <span
               style={{
                 fontFamily: 'var(--studio-font-display)',
