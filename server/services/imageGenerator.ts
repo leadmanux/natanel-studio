@@ -20,11 +20,28 @@ export class GeminiImageGenerator implements ImageGeneratorService {
   }
 
   async generate(request: ImageGeneratorRequest): Promise<ImageGeneratorResponse> {
-    // Reference-image ingestion is intentionally separated for the next milestone.
-    // Keeping this boundary clean lets us add brand consistency without changing callers.
+    const referenceParts = (request.referenceImageUrls || [])
+      .slice(0, 6)
+      .map((reference) => {
+        const match = reference.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+        return match
+          ? {
+              inlineData: {
+                mimeType: match[1],
+                data: match[2],
+              },
+            }
+          : null;
+      })
+      .filter(Boolean);
+
+    const referenceInstruction = referenceParts.length
+      ? '\n\nREFERENCE IMAGE REQUIREMENT: The attached images show the real product and/or approved lifestyle context. Preserve the visible product identity exactly where the product appears. Do not invent controls, colors, proportions, packaging, logos or physical features that are not supported by the references.'
+      : '';
+
     const response = await this.ai.models.generateContent({
       model: modelConfig.imageModel,
-      contents: buildPrompt(request),
+      contents: [buildPrompt(request) + referenceInstruction, ...referenceParts] as any[],
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
         imageConfig: {
