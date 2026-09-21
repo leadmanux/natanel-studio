@@ -24,6 +24,21 @@ function normalizeProject(project: Project): Project {
   });
 }
 
+function projectForPersistence(project: Project): Project {
+  const normalized = normalizeProject(project);
+  return {
+    ...normalized,
+    brand: {
+      ...normalized.brand,
+      // Data-URL logos are already stored once in referenceAssets.
+      logoAssets: (normalized.brand.logoAssets || []).filter((value) => !value.startsWith('data:')),
+    },
+    // Uploaded references are recreated as runtime assets on load. Avoid persisting
+    // a second copy of every base64 image and exhausting browser/Firestore limits.
+    assets: (normalized.assets || []).filter((asset) => asset.source !== 'uploaded'),
+  };
+}
+
 export interface ProjectRepository {
   list(): Promise<Project[]>;
   get(id: string): Promise<Project | null>;
@@ -51,7 +66,7 @@ class FirestoreProjectRepository implements ProjectRepository {
 
   async save(project: Project): Promise<void> {
     const database = this.requireDb();
-    await setDoc(doc(database, 'projects', project.id), normalizeProject(project), { merge: true });
+    await setDoc(doc(database, 'projects', project.id), projectForPersistence(project), { merge: true });
   }
 
   async remove(id: string): Promise<void> {
@@ -70,7 +85,7 @@ class LocalProjectRepository implements ProjectRepository {
 
   private write(projects: Project[]) {
     try {
-      localStorage.setItem(this.key, JSON.stringify(projects.map(normalizeProject)));
+      localStorage.setItem(this.key, JSON.stringify(projects.map(projectForPersistence)));
     } catch (error) {
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
         throw new Error('Project storage is full. Remove unused uploaded references or enable Firebase persistence before adding more large images.');
