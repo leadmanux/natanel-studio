@@ -4,6 +4,7 @@ import type { ComponentDefinition } from '../../shared/componentRegistry';
 import type { ComponentSelectionItem, ComponentSelectorService } from '../../src/ai/contracts';
 import { modelConfig } from '../config/models';
 import { normalizeStudioMotionPreset } from '../../shared/studioMotion';
+import { referenceAssetPromptContext, referenceImageParts } from './referenceAssetContext';
 
 export class GeminiComponentSelector implements ComponentSelectorService {
   private ai: GoogleGenAI | null = null;
@@ -54,6 +55,12 @@ Select approved components from the registry to construct the required pages and
 - Art Direction: ${project.designSystem.artDirection || 'Architectural Monolith'}
 - Required Pages: ${project.strategy.requiredPages.join(', ') || 'Home'}
 
+Uploaded visual references, in the same order as attached images:
+${referenceAssetPromptContext(project, 6)}
+
+REFERENCE-AWARE LAYOUT RULE:
+When visual references are present, choose sections whose image requirements and composition genuinely fit the supplied product/lifestyle material. Do not force a component that requires visual assets we do not have or cannot credibly generate around the real product.
+
 CRITICAL MANDATES:
 1. You may ONLY select from the provided approved components list. Do NOT invent arbitrary markup.
 2. Filter for RTL readiness if direction is 'rtl': ${project.business.direction === 'rtl'}.
@@ -82,7 +89,7 @@ Return a structured JSON list of section selections that form a cohesive page ex
 
     const response = await this.ai.models.generateContent({
       model: modelConfig.reasoningModel || 'gemini-3.8-flash',
-      contents: prompt,
+      contents: [prompt, ...referenceImageParts(project, 6)],
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
